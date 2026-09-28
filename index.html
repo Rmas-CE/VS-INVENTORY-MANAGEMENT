@@ -573,7 +573,7 @@ const REAL_ITEMS = [].concat(...(window.POSM_DATA_PARTS||[]));
 if(!REAL_ITEMS.length) alert('Missing posm-data files. Make sure all posm-data-*.js files are uploaded in the same folder as this HTML.');
 const ORG_META = window.POSM_ORG_META || {};
 
-const BU_LABELS = {AC:'Air Conditioner', AV:'AV / TV / Audio', HA:'Home Appliances'};
+const BU_LABELS = {HA:'HA', AV:'AV', AC:'AC'};
 const BU_PALETTE = ['#15239E','#7B3FE4','#0A87C4','#B4780F','#1B8A5A','#C43B3B','#0D1970','#8C4B2A'];
 function buLabel(bu){ return BU_LABELS[bu] || bu; }
 function buColor(bu){
@@ -582,7 +582,8 @@ function buColor(bu){
   if(idx<0){ idx = Math.abs([...bu].reduce((s,c)=>s+c.charCodeAt(0),0)) % BU_PALETTE.length; }
   return BU_PALETTE[idx % BU_PALETTE.length];
 }
-const BUS = [...new Set(REAL_ITEMS.map(i=>i.bu))];
+const BU_ORDER = Object.keys(BU_LABELS);
+const BUS = [...new Set(REAL_ITEMS.map(i=>i.bu))].sort((a,b)=>{ const x=BU_ORDER.indexOf(a), y=BU_ORDER.indexOf(b); return (x<0?99:x)-(y<0?99:y); });
 
 const WAREHOUSES = Object.keys(ORG_META.warehouseRegion).map(name=>({id:name, dbId:slugId(name), name:name, region:ORG_META.warehouseRegion[name]}));
 const REGIONS = [...new Set(WAREHOUSES.map(w=>w.region))].sort();
@@ -1542,7 +1543,7 @@ function openStockInModal(){
       <div class="field"><label>Description</label><input type="text" id="siNewDesc" placeholder="e.g. USED FOR 2026 NEW MODEL"></div>
       <div class="two-col">
         <div class="field"><label>Type</label><input type="text" id="siNewType" placeholder="e.g. TOPPER, POD, WOBBLER"></div>
-        <div class="field"><label>Business Unit</label><select id="siNewBu">${BUS.map(b=>`<option value="${b}">${buLabel(b)}</option>`).join('')}<option value="OTHER">Other / New BU</option></select></div>
+        <div class="field"><label>Business Unit</label><select id="siNewBu">${BU_ORDER.map(b=>`<option value="${b}">${buLabel(b)}</option>`).join('')}</select></div>
       </div>
       <div class="field"><label>POSM Photo (optional)</label>
         <input type="file" id="siNewPosmImgFile" accept="image/*">
@@ -3977,7 +3978,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.09.25-v5';
+const APP_VERSION = '2026.09.28-v6';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
