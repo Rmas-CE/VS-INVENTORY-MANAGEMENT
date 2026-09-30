@@ -487,7 +487,7 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
       <button class="mini-btn" id="exportAnalyticsBtn" style="background:var(--primary-tint);color:var(--primary-ink);border-color:transparent;font-weight:600;">📊 Download Analytics Report (Excel)</button>
       <button class="mini-btn" id="changeAdminPwBtn" style="display:none;">🔒 Change Admin Password</button>
       <button class="mini-btn" id="alertSettingsBtn" style="display:none;">🔔 Alert Settings</button>
-      <button class="mini-btn" id="resetDataBtn" style="display:none;">Reset to baseline data</button>
+      <button class="mini-btn" id="resetDataBtn" style="display:none;">🧹 Reset test data</button>
       <button class="mini-btn" id="exportDataBtn">Export raw data (JSON)</button>
       <button class="mini-btn" id="installAppBtn" style="display:none;background:var(--primary);color:#fff;border-color:transparent;font-weight:700;">📲 Install App on this phone</button>
       <button class="mini-btn" id="logoutBtn" style="color:var(--danger);">Log out</button>
@@ -3792,11 +3792,53 @@ document.getElementById('globalWarehouseFilter').addEventListener('change', rend
 document.getElementById('notifBell').addEventListener('click', toggleNotifPanel);
 document.getElementById('hamburgerBtn').addEventListener('click', ()=>document.getElementById('sidebar').classList.toggle('open'));
 document.getElementById('exportAnalyticsBtn').addEventListener('click', exportAnalyticsReport);
+/* ============================= RESET TEST DATA (Admin, Google Sheets mode) =============================
+   Clears every Stock In/Out, Request, Transfer and Pending/Rejected item and puts
+   Current Stock back to Beginning Stock. POSM list, Beginning Stock, Warehouses,
+   Trade Supervisors and Stores are kept. The backend saves hidden BACKUP tabs first. */
+function openResetTestDataModal(){
+  if(!session || session.role!=='admin'){ alert('Only an Admin can reset data.'); return; }
+  const baseline = new Set(REAL_ITEMS.map(i=>String(i.code)));
+  const testPosm = DATA.posmMaster.filter(p=>!baseline.has(String(p.code)));
+  const n = a => (a||[]).length;
+  openModal('Reset test data', `
+    <div class="notice" style="background:var(--danger-bg);color:var(--danger);margin-top:0;">${icon('alert',16)}<div>This <b>permanently clears</b> all activity so the tool starts fresh from the Beginning Stock. Use this only once, before going live.</div></div>
+    <div style="font-size:13px;line-height:1.7;margin:10px 0;">
+      <b>Will be cleared:</b><br>
+      • ${n(DATA.transactions)} Stock In / Stock Out / transfer entries<br>
+      • ${n(DATA.requests)} Requests (For Sorting, For Delivery, Delivered, Rejected)<br>
+      • ${n(DATA.transfers)} Transfers<br>
+      • ${n(DATA.pendingActions)} Pending approvals / submissions<br>
+      • Current Stock goes back to the Beginning Stock for every POSM<br>
+      <b style="color:var(--success);">Will be kept:</b> POSM list, Beginning Stock, Warehouses, Trade Supervisors, Stores, admin password and settings.
+    </div>
+    ${testPosm.length ? `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-bottom:10px;"><input type="checkbox" id="rtdRemovePosm" checked style="margin-top:3px;">
+      <span>Also remove the <b>${testPosm.length} POSM added during testing</b>: ${testPosm.slice(0,8).map(p=>p.code).join(', ')}${testPosm.length>8?' …':''}</span></label>` : ''}
+    <div class="field"><label>Type <b>RESET</b> to confirm</label><input id="rtdConfirm" autocomplete="off" placeholder="RESET"></div>
+    <div style="font-size:12px;color:var(--ink-faint);">A backup copy of the cleared tabs is saved as hidden "BACKUP" tabs in your Google Sheet.</div>
+  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="rtdSubmit" style="background:var(--danger);border-color:var(--danger);" disabled>Reset now</button>`);
+  const inp = document.getElementById('rtdConfirm'), btn = document.getElementById('rtdSubmit');
+  inp.addEventListener('input', ()=>{ btn.disabled = inp.value.trim()!=='RESET'; });
+  btn.addEventListener('click', async ()=>{
+    const rm = document.getElementById('rtdRemovePosm');
+    btn.disabled = true; btn.textContent = 'Resetting...';
+    try{
+      const res = await postAction('resetTestData', {
+        adminPassword: session.password, confirm:'RESET', performedBy: session.name,
+        removePosmCodes: (rm && rm.checked) ? testPosm.map(p=>p.code) : []
+      });
+      closeModal();
+      await loadFromServer();
+      renderAll();
+      alert('Done! All test activity was cleared and Current Stock is back to the Beginning Stock.' + (res.removedPosm ? '\n\nRemoved '+res.removedPosm+' test POSM.' : '') + '\n\nA backup was saved as hidden BACKUP tabs in the Google Sheet.');
+    }catch(e){
+      alert('Reset failed.\n\n' + (e.message||'Please try again.'));
+      btn.disabled = false; btn.textContent = 'Reset now';
+    }
+  });
+}
 document.getElementById('resetDataBtn').addEventListener('click', ()=>{
-  if(USE_DB){
-    alert('Your data now lives in your Google Sheet. To reset it, edit or clear the rows directly in the Sheet itself (it also has version history under File > Version history).');
-    return;
-  }
+  if(USE_DB){ openResetTestDataModal(); return; }
   if(confirm('Reset back to the original baseline data (all manual entries will be lost)?')){
     try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
     DATA = buildInitialData(); saveData(); renderAll();
@@ -4009,7 +4051,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.09.28-v6';
+const APP_VERSION = '2026.09.30-v7';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
