@@ -920,14 +920,14 @@ document.getElementById('alertSettingsBtn') && document.getElementById('alertSet
   const btnTrigger = document.getElementById('alertSettingsBtn');
   const origLabel = btnTrigger.textContent;
   btnTrigger.disabled = true; btnTrigger.textContent = 'Loading...';
-  let current = {alertEmails:'', telegramBotToken:'', telegramChatId:'', viberAuthToken:'', viberUserId:'', lowStockThreshold:50};
+  let current = {alertEmails:'', telegramBotToken:'', telegramChatId:'', viberAuthToken:'', viberUserId:'', lowStockThreshold:15};
   try{
     current = await fetch(APPS_SCRIPT_URL+'?action=getAlertSettings&t='+Date.now(), {redirect:'follow'}).then(r=>r.json());
   }catch(e){}
   btnTrigger.disabled = false; btnTrigger.textContent = origLabel;
   openModal('Alert Settings', `
     <div class="field"><label>Alert Emails (comma-separated)</label><input type="text" id="asEmails" value="${current.alertEmails||''}" placeholder="e.g. manager@company.com, ops@company.com"></div>
-    <div class="field"><label>Low Stock Reorder Threshold (units, all warehouses combined)</label><input type="number" id="asThreshold" value="${current.lowStockThreshold||50}" min="0"></div>
+    <div class="field"><label>Low Stock Reorder Threshold (units, all warehouses combined)</label><input type="number" id="asThreshold" value="${current.lowStockThreshold||15}" min="0"></div>
     <div class="field"><label>Telegram Bot Token <span class="cell-sub">(create a bot via @BotFather)</span></label><input type="text" id="asTgToken" value="${current.telegramBotToken||''}"></div>
     <div class="field"><label>Telegram Chat ID</label><input type="text" id="asTgChat" value="${current.telegramChatId||''}"></div>
     <div class="field"><label>Viber Auth Token <span class="cell-sub">(requires a verified Viber Business account)</span></label><input type="text" id="asViberToken" value="${current.viberAuthToken||''}"></div>
@@ -942,7 +942,7 @@ document.getElementById('alertSettingsBtn') && document.getElementById('alertSet
       await postAction('saveAlertSettings', {
         adminPassword: session.password,
         alertEmails: document.getElementById('asEmails').value.trim(),
-        lowStockThreshold: Number(document.getElementById('asThreshold').value) || 50,
+        lowStockThreshold: Number(document.getElementById('asThreshold').value) || 15,
         telegramBotToken: document.getElementById('asTgToken').value.trim(),
         telegramChatId: document.getElementById('asTgChat').value.trim(),
         viberAuthToken: document.getElementById('asViberToken').value.trim(),
@@ -965,7 +965,7 @@ document.getElementById('alertSettingsBtn') && document.getElementById('alertSet
       await postAction('saveAlertSettings', {
         adminPassword: session.password,
         alertEmails: document.getElementById('asEmails').value.trim(),
-        lowStockThreshold: Number(document.getElementById('asThreshold').value) || 50,
+        lowStockThreshold: Number(document.getElementById('asThreshold').value) || 15,
         telegramBotToken: document.getElementById('asTgToken').value.trim(),
         telegramChatId: document.getElementById('asTgChat').value.trim(),
         viberAuthToken: document.getElementById('asViberToken').value.trim(),
@@ -2482,7 +2482,7 @@ function begInsightsHtml(perWh, totalCur, totalBeg, totalIO, posmList){
   }
 
   // 4) POSM availability
-  const threshold = (ALERTS && ALERTS.lowStockThreshold) || 50;
+  const threshold = (ALERTS && ALERTS.lowStockThreshold) || 15;
   let zero=0, low=0;
   posmList.forEach(p=>{ const q = totalQtyForPosm(p.code,'all'); if(q<=0) zero++; else if(q<=threshold) low++; });
   if(posmList.length){
@@ -4110,7 +4110,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.09.30-v8';
+const APP_VERSION = '2026.09.30-v9';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
