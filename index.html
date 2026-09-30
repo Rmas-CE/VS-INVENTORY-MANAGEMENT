@@ -49,6 +49,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* Backup source: if cdnjs is blocked or slow, load the same libraries from jsDelivr */
+if(!window.Chart) document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"><\/script>');
+if(!window.XLSX) document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');
+</script>
 <style>
 :root{--vh:1vh;
   --bg:#F1F3F7; --surface:#FFFFFF; --surface-alt:#F7F8FB; --ink:#161A24; --ink-soft:#5B6272; --ink-faint:#9199AA;
@@ -1930,20 +1935,20 @@ function renderDashboard(){
 
   destroyCharts(['chartWhStock','chartMoveSplit','chartWeeklyTrend']);
   const c = getChartColors();
-  charts.chartWhStock = new Chart(document.getElementById('chartWhStock'), {
+  charts.chartWhStock = safeChart(document.getElementById('chartWhStock'), {
     type:'bar',
     data:{ labels: WAREHOUSES.map(w=>w.name), datasets:[{ label:'Current Stock', data: WAREHOUSES.map(w=>DATA.inventory.filter(r=>r.warehouseId===w.id).reduce((s,r)=>s+r.qty,0)),
       backgroundColor: c.primary, borderRadius:6, maxBarThickness:32 }]},
     options: baseChartOpts(c, {legend:false})
   });
   const moveCounts = movementCounts(whFilter, buFilter);
-  charts.chartMoveSplit = new Chart(document.getElementById('chartMoveSplit'), {
+  charts.chartMoveSplit = safeChart(document.getElementById('chartMoveSplit'), {
     type:'doughnut',
     data:{ labels:['Fast Moving','Low Moving','Non-Moving'], datasets:[{data:[moveCounts.fast,moveCounts.low,moveCounts.non], backgroundColor:[c.success,c.warning,c.danger], borderWidth:0}]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:c.ink, boxWidth:10, padding:14, font:{size:11.5}}}} }
   });
   const weekly = weeklyMetrics(8, buFilter);
-  charts.chartWeeklyTrend = new Chart(document.getElementById('chartWeeklyTrend'), {
+  charts.chartWeeklyTrend = safeChart(document.getElementById('chartWeeklyTrend'), {
     type:'line',
     data:{ labels: weekly.map(w=>w.label), datasets:[
       { label:'Delivered', data: weekly.map(w=>w.delivered), borderColor:c.success, backgroundColor:c.success, tension:.35, fill:false, pointRadius:3 },
@@ -2034,12 +2039,12 @@ function renderInventory(){
 
   destroyCharts(['chartInvByWh','chartInvByBu']);
   const c = getChartColors();
-  charts.chartInvByWh = new Chart(document.getElementById('chartInvByWh'), {
+  charts.chartInvByWh = safeChart(document.getElementById('chartInvByWh'), {
     type:'bar',
     data:{ labels: WAREHOUSES.map(w=>w.name), datasets:[{ label:'Qty', data: WAREHOUSES.map(w=> rows.reduce((s,p)=>s+ (invRow(w.id,p.code)?invRow(w.id,p.code).qty:0),0)), backgroundColor:c.primary, borderRadius:6, maxBarThickness:32 }]},
     options: baseChartOpts(c,{legend:false})
   });
-  charts.chartInvByBu = new Chart(document.getElementById('chartInvByBu'), {
+  charts.chartInvByBu = safeChart(document.getElementById('chartInvByBu'), {
     type:'doughnut',
     data:{ labels: BUS.map(buLabel), datasets:[{ data: BUS.map(bu=> rows.filter(p=>p.bu===bu).reduce((s,p)=>s+totalQtyForPosm(p.code,'all'),0)), backgroundColor: BUS.map(buColor), borderWidth:0 }]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:c.ink, boxWidth:10, padding:14, font:{size:11.5}}}} }
@@ -2414,11 +2419,11 @@ function renderMetrics(){
 
   destroyCharts(['chartRateTrend','chartDelLapses']);
   const c = getChartColors();
-  charts.chartRateTrend = new Chart(document.getElementById('chartRateTrend'), {
+  charts.chartRateTrend = safeChart(document.getElementById('chartRateTrend'), {
     type:'line', data:{ labels:data.map(d=>d.label), datasets:[{label:'On-time rate %', data:data.map(d=>d.rate), borderColor:c.primary, backgroundColor:c.primaryTint, tension:.35, fill:true, pointRadius:3}]},
     options: baseChartOpts(c,{legend:false}, true)
   });
-  charts.chartDelLapses = new Chart(document.getElementById('chartDelLapses'), {
+  charts.chartDelLapses = safeChart(document.getElementById('chartDelLapses'), {
     type:'bar', data:{ labels:data.map(d=>d.label), datasets:[
       {label:'Delivered', data:data.map(d=>d.delivered), backgroundColor:c.success, borderRadius:5, maxBarThickness:26},
       {label:'Late', data:data.map(d=>d.late), backgroundColor:c.danger, borderRadius:5, maxBarThickness:26},
@@ -2478,7 +2483,7 @@ function renderBeginning(){
   });
   destroyCharts(['chartBegWh']);
   const c = getChartColors();
-  charts.chartBegWh = new Chart(document.getElementById('chartBegWh'), {
+  charts.chartBegWh = safeChart(document.getElementById('chartBegWh'), {
     type:'bar', data:{ labels: perWh.map(r=>r.w.name),
       datasets:[{label:'Beginning Stock', data:perWh.map(r=>r.beg), backgroundColor:c.ink3, borderRadius:5, maxBarThickness:28},
         {label:'Current Stock', data:perWh.map(r=>r.cur), backgroundColor:c.primary, borderRadius:5, maxBarThickness:28}]},
@@ -2532,7 +2537,7 @@ function renderMovement(){
   destroyCharts(['chartMoveBar']);
   const c = getChartColors();
   const top = rows.slice(0,40);
-  charts.chartMoveBar = new Chart(document.getElementById('chartMoveBar'), {
+  charts.chartMoveBar = safeChart(document.getElementById('chartMoveBar'), {
     type:'bar', data:{ labels: top.map(r=>r.p.code), datasets:[{ label:'Qty dispatched (60d)', data: top.map(r=>r.outQty), backgroundColor: top.map(r=> r.cat==='fast'?c.success:r.cat==='low'?c.warning:c.danger), borderRadius:5, maxBarThickness:22 }]},
     options: baseChartOpts(c,{legend:false})
   });
@@ -2818,6 +2823,8 @@ function renderMySubmissions(){
 }
 
 /* ============================= CHART UTIL ============================= */
+/* Charts never block saving: if Chart.js failed to load, skip the chart instead of crashing */
+function safeChart(el, cfg){ if(typeof Chart==='undefined' || !el) return null; try{ return new Chart(el, cfg); }catch(e){ console.warn('Chart skipped:', e); return null; } }
 function destroyCharts(keys){ keys.forEach(k=>{ if(charts[k]){ charts[k].destroy(); delete charts[k]; } }); }
 function getChartColors(){
   const styles = getComputedStyle(document.body);
