@@ -141,6 +141,12 @@ a{color:var(--primary);}
 .panel-head h3{font-size:14.5px;} .panel-sub{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
 .panel-actions{display:flex;gap:8px;flex-wrap:wrap;}
 .chart-wrap{position:relative;height:240px;} .chart-wrap.tall{height:300px;}
+.insights{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
+.insights h4{margin:0 0 10px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;}
+.insight-row{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:10px;background:var(--surface-alt);margin-bottom:8px;font-size:12.5px;line-height:1.45;color:var(--ink);}
+.insight-row:last-child{margin-bottom:0;}
+.insight-dot{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;}
+.insight-row b{font-weight:700;}
 .btn{border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);border-radius:var(--radius-sm);padding:8px 13px;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px;}
 .btn:hover{border-color:var(--ink-faint);} .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;} .btn.primary:hover{background:var(--primary-ink);}
 .btn.danger{background:var(--danger-bg);border-color:transparent;color:var(--danger);} .btn.ghost{background:none;border-color:transparent;}
@@ -2432,6 +2438,59 @@ function renderMetrics(){
 }
 
 /* ============================= RENDER: BEGINNING STOCK ============================= */
+/* Auto insights under the Beginning vs Current chart — recalculated from live data every render */
+function begInsightsHtml(perWh, totalCur, totalBeg, totalIO, posmList){
+  const out = [];
+  const fmt = n => Number(n||0).toLocaleString();
+  const pct = (a,b) => b ? Math.round(a/b*100) : 0;
+  const row = (emoji, bg, html) => out.push(`<div class="insight-row"><div class="insight-dot" style="background:${bg};">${emoji}</div><div>${html}</div></div>`);
+
+  // 1) Where the stock is
+  const ranked = perWh.filter(r=>r.cur>0).sort((a,b)=>b.cur-a.cur);
+  if(ranked.length && totalCur>0){
+    const top = ranked[0];
+    const top3 = ranked.slice(0,3);
+    const top3Share = pct(top3.reduce((s,r)=>s+r.cur,0), totalCur);
+    row('🏬','var(--primary-tint)', `<b>${top.w.name}</b> holds <b>${pct(top.cur,totalCur)}%</b> of all stock (${fmt(top.cur)} pcs).${ranked.length>=3 ? ` The top 3 warehouses (${top3.map(r=>r.w.name).join(', ')}) hold <b>${top3Share}%</b>.` : ''}`);
+  }
+
+  // 2) Empty warehouses
+  const empty = perWh.filter(r=>r.cur<=0);
+  if(empty.length){
+    row('⚠️','var(--warning-bg)', `<b>${empty.length} warehouse${empty.length>1?'s have':' has'} no stock</b>: ${empty.map(r=>r.w.name).join(', ')}. Requests from these areas will need a transfer or delivery from another warehouse.`);
+  }
+
+  // 3) Movement since the beginning stock
+  if(!totalIO.sIn && !totalIO.sOut){
+    row('🟢','var(--success-bg)', `<b>No stock movement yet.</b> Current stock is exactly the same as the Beginning Stock in every warehouse.`);
+  } else {
+    row('🔄','var(--primary-tint)', `Since the beginning: <b style="color:var(--success);">+${fmt(totalIO.sIn)}</b> stocked in and <b style="color:var(--danger);">-${fmt(totalIO.sOut)}</b> stocked out — <b>${pct(totalIO.sOut,totalBeg)}%</b> of the beginning stock has been released.`);
+    const moved = perWh.filter(r=>r.variance!==0);
+    const up = moved.filter(r=>r.variance>0).sort((a,b)=>b.variance-a.variance)[0];
+    const down = moved.filter(r=>r.variance<0).sort((a,b)=>a.variance-b.variance)[0];
+    if(up || down){
+      row('📊','var(--surface)', [
+        up ? `Biggest increase: <b>${up.w.name}</b> (<span style="color:var(--success);font-weight:700;">+${fmt(up.variance)}</span>)` : '',
+        down ? `Biggest decrease: <b>${down.w.name}</b> (<span style="color:var(--danger);font-weight:700;">${fmt(down.variance)}</span>)` : ''
+      ].filter(Boolean).join('<br>'));
+    }
+    // Most released POSM
+    const outBy = {};
+    (DATA.transactions||[]).forEach(t=>{ if(t.type==='out' && posmList.some(p=>p.code===t.posmCode)) outBy[t.posmCode]=(outBy[t.posmCode]||0)+(Number(t.qty)||0); });
+    const topOut = Object.entries(outBy).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    if(topOut.length) row('🚚','var(--danger-bg)', `Most stocked-out POSM: ${topOut.map(([c,q])=>`<b>${c}</b> (${fmt(q)})`).join(', ')}.`);
+  }
+
+  // 4) POSM availability
+  const threshold = (ALERTS && ALERTS.lowStockThreshold) || 50;
+  let zero=0, low=0;
+  posmList.forEach(p=>{ const q = totalQtyForPosm(p.code,'all'); if(q<=0) zero++; else if(q<=threshold) low++; });
+  if(posmList.length){
+    row('📦', zero? 'var(--danger-bg)':'var(--success-bg)', `Out of ${fmt(posmList.length)} POSM: <b>${fmt(zero)}</b> have zero stock in all warehouses and <b>${fmt(low)}</b> are running low (${threshold} pcs or less).`);
+  }
+
+  return out.length ? `<div class="insights"><h4>💡 Insights</h4>${out.join('')}</div>` : '';
+}
 /* Stock In / Stock Out totals since the beginning stock.
    Per warehouse, transfers count too (they really add/remove stock there).
    Across all warehouses, transfers are left out because they only move stock
@@ -2472,7 +2531,7 @@ function renderBeginning(){
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Net Variance</span><div class="kpi-icon" style="background:${variance>=0?'var(--success-bg)':'var(--danger-bg)'};color:${variance>=0?'var(--success)':'var(--danger)'}">${icon(variance>=0?'arrowUp':'arrowDown',16)}</div></div><div class="kpi-value">${variance>=0?'+':''}${variance.toLocaleString()}</div><div class="kpi-delta ${variance>=0?'up':'down'}">Beginning vs current</div></div>
     </div>
     <div class="section-row cols-2">
-      <div class="panel"><div class="panel-head"><div><h3>Beginning vs Current — per Warehouse</h3></div></div><div class="chart-wrap tall"><canvas id="chartBegWh"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><div><h3>Beginning vs Current — per Warehouse</h3></div></div><div class="chart-wrap tall"><canvas id="chartBegWh"></canvas></div>${begInsightsHtml(perWh, totalCur, totalBeg, totalIO, begPosmList)}</div>
       <div class="panel"><div class="panel-head"><div><h3>Per-Warehouse Breakdown</h3><div class="panel-sub">Stock In/Out here includes transfers between warehouses</div></div></div>
         <div class="table-wrap"><table><thead><tr><th>Warehouse</th><th>Beginning</th><th>Stock In</th><th>Stock Out</th><th>Current</th><th>Variance</th></tr></thead><tbody>
           ${perWh.map(r=>`<tr><td class="cell-main">${r.w.name}</td><td>${r.beg.toLocaleString()}</td><td>${ioCell(r.sIn,'+')}</td><td>${ioCell(r.sOut,'-')}</td><td class="qty-strong">${r.cur.toLocaleString()}</td>
@@ -4051,7 +4110,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.09.30-v7';
+const APP_VERSION = '2026.09.30-v8';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
