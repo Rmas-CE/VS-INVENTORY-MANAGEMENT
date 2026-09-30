@@ -2432,6 +2432,20 @@ function renderMetrics(){
 }
 
 /* ============================= RENDER: BEGINNING STOCK ============================= */
+/* Stock In / Stock Out totals since the beginning stock.
+   Per warehouse, transfers count too (they really add/remove stock there).
+   Across all warehouses, transfers are left out because they only move stock
+   between warehouses — so Beginning + Stock In − Stock Out = Current. */
+function inOutTotals(filterFn, includeTransfers){
+  let sIn=0, sOut=0;
+  (DATA.transactions||[]).forEach(t=>{
+    if(!filterFn(t)) return;
+    const q = Number(t.qty)||0;
+    if(t.type==='in' || (includeTransfers && t.type==='transfer_in')) sIn += q;
+    else if(t.type==='out' || (includeTransfers && t.type==='transfer_out')) sOut += q;
+  });
+  return {sIn, sOut};
+}
 function renderBeginning(){
   const buFilter = currentFilterBU();
   const begPosmList = DATA.posmMaster.filter(p=>buFilter==='all'||p.bu===buFilter);
@@ -2439,34 +2453,40 @@ function renderBeginning(){
   const totalBeg = scopedInv.reduce((s,r)=>s+r.beginningStock,0);
   const totalCur = scopedInv.reduce((s,r)=>s+r.qty,0);
   const variance = totalCur-totalBeg;
+  const totalIO = inOutTotals(t=>matchesBUFilter(t.posmCode), false);
   const perWh = WAREHOUSES.map(w=>{
     const rows = scopedInv.filter(r=>r.warehouseId===w.id);
     const beg = rows.reduce((s,r)=>s+r.beginningStock,0);
     const cur = rows.reduce((s,r)=>s+r.qty,0);
-    return {w, beg, cur, variance:cur-beg};
+    const io = inOutTotals(t=>t.warehouseId===w.id && matchesBUFilter(t.posmCode), true);
+    return {w, beg, cur, sIn:io.sIn, sOut:io.sOut, variance:cur-beg};
   });
+  const ioCell = (n, sign)=> n ? `<span style="color:${sign==='+'?'var(--success)':'var(--danger)'};font-weight:600;">${sign}${n.toLocaleString()}</span>` : '<span style="color:var(--ink-faint);">0</span>';
   const html = `
     <div class="notice">${icon('alert',16)}<div>The <b>Beginning Stock</b> here is each POSM's current stock count from when the real data was first loaded into this tool. As you use Stock In/Out, Requests, and Transfers, this shows the variance from that baseline.</div></div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Overall Beginning Stock</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('beginning',16)}</div></div><div class="kpi-value">${totalBeg.toLocaleString()}</div><div class="kpi-delta flat">Baseline, all warehouses</div></div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Current Total Stock</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('inventory',16)}</div></div><div class="kpi-value">${totalCur.toLocaleString()}</div><div class="kpi-delta flat">Current total</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Total Stock In</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('arrowUp',16)}</div></div><div class="kpi-value" style="color:var(--success);">+${totalIO.sIn.toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Total Stock Out</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('arrowDown',16)}</div></div><div class="kpi-value" style="color:var(--danger);">-${totalIO.sOut.toLocaleString()}</div></div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Net Variance</span><div class="kpi-icon" style="background:${variance>=0?'var(--success-bg)':'var(--danger-bg)'};color:${variance>=0?'var(--success)':'var(--danger)'}">${icon(variance>=0?'arrowUp':'arrowDown',16)}</div></div><div class="kpi-value">${variance>=0?'+':''}${variance.toLocaleString()}</div><div class="kpi-delta ${variance>=0?'up':'down'}">Beginning vs current</div></div>
     </div>
     <div class="section-row cols-2">
       <div class="panel"><div class="panel-head"><div><h3>Beginning vs Current — per Warehouse</h3></div></div><div class="chart-wrap tall"><canvas id="chartBegWh"></canvas></div></div>
-      <div class="panel"><div class="panel-head"><div><h3>Per-Warehouse Breakdown</h3></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Warehouse</th><th>Beginning</th><th>Current</th><th>Variance</th></tr></thead><tbody>
-          ${perWh.map(r=>`<tr><td class="cell-main">${r.w.name}</td><td>${r.beg.toLocaleString()}</td><td class="qty-strong">${r.cur.toLocaleString()}</td>
+      <div class="panel"><div class="panel-head"><div><h3>Per-Warehouse Breakdown</h3><div class="panel-sub">Stock In/Out here includes transfers between warehouses</div></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Warehouse</th><th>Beginning</th><th>Stock In</th><th>Stock Out</th><th>Current</th><th>Variance</th></tr></thead><tbody>
+          ${perWh.map(r=>`<tr><td class="cell-main">${r.w.name}</td><td>${r.beg.toLocaleString()}</td><td>${ioCell(r.sIn,'+')}</td><td>${ioCell(r.sOut,'-')}</td><td class="qty-strong">${r.cur.toLocaleString()}</td>
             <td style="color:${r.variance>=0?'var(--success)':'var(--danger)'};font-weight:700;">${r.variance>=0?'+':''}${r.variance.toLocaleString()}</td></tr>`).join('')}
         </tbody></table></div></div>
     </div>
     <div class="panel">
       <div class="panel-head"><div><h3>Beginning Stock per POSM (all warehouses)</h3></div><button class="btn sm" id="btnExportBeginning">⬇ Excel</button></div>
-      <div class="table-wrap"><table><thead><tr><th>POSM</th><th>Business Unit</th><th>Beginning Stock</th><th>Current Stock</th><th>Variance</th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>POSM</th><th>Business Unit</th><th>Beginning Stock</th><th>Stock In</th><th>Stock Out</th><th>Current Stock</th><th>Variance</th></tr></thead><tbody>
         ${begPosmList.map(p=>{
           const beg = totalBeginningForPosm(p.code,'all'); const cur = totalQtyForPosm(p.code,'all'); const v = cur-beg;
+          const io = inOutTotals(t=>t.posmCode===p.code, false);
           return `<tr><td><div class="row-flex">${tile(p,30)}<div><div class="cell-main">${p.code}</div><div class="cell-sub">${p.desc}</div></div></div></td>
-            <td>${buLabel(p.bu)}</td><td>${beg.toLocaleString()}</td><td class="qty-strong">${cur.toLocaleString()}</td>
+            <td>${buLabel(p.bu)}</td><td>${beg.toLocaleString()}</td><td>${ioCell(io.sIn,'+')}</td><td>${ioCell(io.sOut,'-')}</td><td class="qty-strong">${cur.toLocaleString()}</td>
             <td style="color:${v>=0?'var(--success)':'var(--danger)'};font-weight:700;">${v>=0?'+':''}${v.toLocaleString()}</td></tr>`;
         }).join('')}
       </tbody></table></div>
@@ -2477,7 +2497,8 @@ function renderBeginning(){
   document.getElementById('btnExportBeginning').addEventListener('click', ()=>{
     const exportRows = begPosmList.map(p=>{
       const beg = totalBeginningForPosm(p.code,'all'); const cur = totalQtyForPosm(p.code,'all');
-      return {'POSM Code':p.code, Description:p.desc, 'Business Unit':buLabel(p.bu), 'Beginning Stock':beg, 'Current Stock':cur, Variance:cur-beg};
+      const io = inOutTotals(t=>t.posmCode===p.code, false);
+      return {'POSM Code':p.code, Description:p.desc, 'Business Unit':buLabel(p.bu), 'Beginning Stock':beg, 'Stock In':io.sIn, 'Stock Out':io.sOut, 'Current Stock':cur, Variance:cur-beg};
     });
     exportRowsToExcel(exportRows, 'Beginning-Stock-'+todayStr()+'.xlsx', 'Beginning Stock');
   });
