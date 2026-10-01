@@ -832,6 +832,14 @@ async function loadFromServer(silent){
 }
 
 /* ============================= SESSION / LOGIN ============================= */
+// ===== TEMPORARY TEST SWITCH =====
+// true  = walang login screen, diretso Admin
+// false = normal (may password ulit)
+const DISABLE_LOGIN_FOR_TESTING = true;
+// Kung kailangan mag-save/approve sa Google Sheets habang naka-test mode,
+// ilagay dito ang admin password (backend still checks it). Pwede iwanang blank.
+const TEST_ADMIN_PASSWORD = '';
+// =================================
 const SESSION_KEY = 'rmas_posm_session_v1';
 let session = null; // {role:'admin'|'user', name, password (admin only, kept for re-auth on each action)}
 
@@ -1005,6 +1013,16 @@ async function initApp(){
   }
 
   USE_DB = true;
+
+  // ===== TEMPORARY: login disabled for testing =====
+  // Set to false to bring back the login screen.
+  if(DISABLE_LOGIN_FOR_TESTING){
+    session = {role:'admin', name:'Admin (Test)', password: TEST_ADMIN_PASSWORD};
+    await proceedAfterLogin();
+    return;
+  }
+  // =================================================
+
   session = loadSession();
   if(!session){ showLoginScreen(); return; }
   await proceedAfterLogin();
