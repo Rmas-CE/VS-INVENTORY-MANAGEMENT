@@ -200,6 +200,8 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .pbar{height:6px;border-radius:6px;background:var(--surface-alt);overflow:hidden;border:1px solid var(--line);} .pbar > div{height:100%;background:var(--primary);}
 .status-select{border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);border-radius:var(--radius-sm);padding:4px 6px;font-size:11.5px;}
 body.region-user .admin-only{display:none !important;}
+.dash-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;}
+.xl-pair{display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;}
 .kpi-click{cursor:pointer;transition:transform .12s, box-shadow .12s;}
 .kpi-click:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(21,80,230,.14);}
 .kpi-click:active{transform:translateY(0);}
@@ -496,6 +498,7 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
     <nav id="nav"></nav>
     <div class="sidebar-footer">
       <button class="mini-btn" id="exportAnalyticsBtn" style="background:var(--primary-tint);color:var(--primary-ink);border-color:transparent;font-weight:600;">📊 Download Analytics Report (Excel)</button>
+      <button class="mini-btn" id="exportAnalyticsPdfBtn" style="background:var(--primary-tint);color:var(--primary-ink);border-color:transparent;font-weight:600;">📄 Download Analytics Report (PDF)</button>
       <button class="mini-btn" id="changeAdminPwBtn" style="display:none;">🔒 Change Admin Password</button>
       <button class="mini-btn" id="changeRegionPwBtn" style="display:none;">🔒 Change My Password</button>
       <button class="mini-btn" id="regionAccountsBtn" style="display:none;">👥 Region Accounts</button>
@@ -1556,7 +1559,7 @@ function findStoreEntry(storeName){ return storeRowsArray().find(s=>s.store===st
 /* ============================= NAV ============================= */
 const SECTIONS = [
   {key:'dashboard', label:'Dashboard', icon:'dashboard', sub:'Overview of the POSM inventory'},
-  {key:'inventory', label:'Full Inventory', icon:'inventory', sub:'Current stock per warehouse, including items due for disposal', group:'Inventory'},
+  {key:'inventory', label:'All Inventory', icon:'inventory', sub:'Current stock per warehouse, including items due for disposal', group:'Inventory'},
   {key:'stockflow', label:'Stock In / Out', icon:'stock', sub:'Log of incoming and outgoing POSM', group:'Inventory'},
   {key:'scan', label:'Scan Stock In/Out', icon:'scan', sub:'Scan POSM barcode labels with your phone camera', group:'Inventory'},
   {key:'labels', label:'Print Barcode Labels', icon:'barcode', sub:'Generate printable barcode labels for every POSM', group:'Inventory'},
@@ -2104,8 +2107,8 @@ function renderDashboard(){
   const deltaVsBeginning = totalBeginning ? ((totalStock-totalBeginning)/totalBeginning*100) : 0;
 
   const html = `
+    <div class="dash-toolbar"><button class="btn primary sm" id="btnOnePager">📄 One-Page Report (PDF)</button></div>
     ${renderAlertPanel()}
-    <div class="notice">${icon('check',16)}<div><b>Real POSM master data</b> from the Import Center (${DATA.posmMaster.length} POSM types, ${WAREHOUSES.length} warehouses). The beginning stock here is the current POSM count from when the data was loaded — In/Out, Requests, and Transfers tracking starts from that point.</div></div>
     <div class="kpi-grid">
       <div class="kpi-card kpi-click" data-kpi-go="stock" title="Open inventory"><div class="kpi-top"><span class="kpi-label">Total POSM Stock</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('inventory',16)}</div></div>
         <div class="kpi-value">${totalStock.toLocaleString()}</div><div class="kpi-delta ${deltaVsBeginning>=0?'up':'down'}">${deltaVsBeginning>=0?'+':''}${deltaVsBeginning.toFixed(1)}% vs beginning stock</div></div>
@@ -2140,9 +2143,13 @@ function renderDashboard(){
       </div>
       <div id="activityFeedRoot"></div>
     </div>
+    <div class="notice" style="margin-top:16px;">${icon('check',16)}<div><b>Real POSM master data</b> from the Import Center (${DATA.posmMaster.length} POSM types, ${WAREHOUSES.length} warehouses). The beginning stock here is the current POSM count from when the data was loaded — In/Out, Requests, and Transfers tracking starts from that point.</div></div>
   `;
   document.getElementById('content').innerHTML = html;
   renderActivityFeed();
+  document.getElementById('btnOnePager').addEventListener('click', ()=>{
+    try{ buildOnePageReport(); }catch(e){ console.error(e); alert('Could not build the report: '+(e.message||e)); }
+  });
   document.querySelectorAll('[data-actfilter]').forEach(b=>b.addEventListener('click', ()=>{
     dashboardActivityFilter = b.dataset.actfilter;
     document.querySelectorAll('[data-actfilter]').forEach(x=>x.classList.toggle('active', x.dataset.actfilter===dashboardActivityFilter));
@@ -2241,7 +2248,7 @@ function renderInventoryCore(allMode){
   const html = `
     <div class="panel">
       <div class="panel-head">
-        <div><h3>${isRegionUser() ? (allMode ? 'All Warehouse Inventory' : 'My Inventory — '+escHtml(session.region)) : 'Full Inventory'}</h3><div class="panel-sub">${allMode ? 'Stock across every warehouse in all regions (view only) — use this to find which warehouse has the POSM you need' : (isRegionUser() ? 'Stock of your region\'s warehouses — Stock In / Stock Out quantity here (new POSM are added by Admin)' : 'All POSM — mark items that need disposal as Expired/Obsolete, or Delete if no longer used at all')}</div></div>
+        <div><h3>${isRegionUser() ? (allMode ? 'All Warehouse Inventory' : 'My Inventory — '+escHtml(session.region)) : 'All Inventory'}</h3><div class="panel-sub">${allMode ? 'Stock across every warehouse in all regions (view only) — use this to find which warehouse has the POSM you need' : (isRegionUser() ? 'Stock of your region\'s warehouses — Stock In / Stock Out quantity here (new POSM are added by Admin)' : 'All POSM — mark items that need disposal as Expired/Obsolete, or Delete if no longer used at all')}</div></div>
         <div class="panel-actions"><button class="btn" id="btnGoScan">${icon('scan',14)} Scan</button><button class="btn primary" id="btnStockIn">${icon('plus',14)} Stock In</button><button class="btn" id="btnStockOut">${icon('arrowDown',14)} Stock Out</button><button class="btn sm" id="btnExportInventory">⬇ Excel</button></div>
       </div>
       ${isRegionUser() ? `<div class="seg" id="invScopeSeg" style="margin-bottom:12px;">
@@ -2299,7 +2306,7 @@ function renderInventoryCore(allMode){
       Code:p.code, Description:p.desc, Type:p.type, 'Business Unit':buLabel(p.bu), Status:p.status,
       'Qty (filtered warehouse)': totalQtyForPosm(p.code, whFilter)
     }));
-    exportRowsToExcel(exportRows, 'Full-Inventory-'+todayStr()+'.xlsx', 'Full Inventory');
+    exportRowsToExcel(exportRows, 'All-Inventory-'+todayStr()+'.xlsx', 'All Inventory');
   });
   const scopeSeg = document.getElementById('invScopeSeg');
   if(scopeSeg) scopeSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{ invScope = b.dataset.scope; renderInventory(); }));
@@ -2809,8 +2816,8 @@ function renderBeginning(){
         </tbody></table></div></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div><h3>Beginning Stock per POSM (all warehouses)</h3></div><button class="btn sm" id="btnExportBeginning">⬇ Excel</button></div>
-      <div class="table-wrap"><table><thead><tr><th>POSM</th><th>Business Unit</th><th>Beginning Stock</th><th>Stock In</th><th>Stock Out</th><th>Current Stock</th><th>Variance</th></tr></thead><tbody>
+      <div class="panel-head"><div><h3>Beginning Stock per POSM (all warehouses)</h3><div class="panel-sub">${begPosmList.length} POSM — scroll inside the table to see all</div></div><button class="btn sm" id="btnExportBeginning">⬇ Excel</button></div>
+      <div class="table-wrap scroll-y" style="max-height:560px;"><table><thead><tr><th>POSM</th><th>Business Unit</th><th>Beginning Stock</th><th>Stock In</th><th>Stock Out</th><th>Current Stock</th><th>Variance</th></tr></thead><tbody>
         ${begPosmList.map(p=>{
           const beg = totalBeginningForPosm(p.code,'all'); const cur = totalQtyForPosm(p.code,'all'); const v = cur-beg;
           const io = inOutTotals(t=>t.posmCode===p.code, false);
@@ -3245,6 +3252,7 @@ function renderSection(sectionChanged){
    for when the person only wants THIS page's (filtered) data, not the full
    multi-sheet Analytics Report. ---- */
 function exportRowsToExcel(rows, filename, sheetName){
+  if(takePdfMode()) return exportSectionsToPdf([{name:sheetName||'', rows:rows||[]}], pdfName(filename), sheetName || titleFromFilename(filename));
   if(typeof XLSX === 'undefined'){ alert('The export library has not fully loaded yet. Please try again in a few seconds.'); return; }
   if(!rows || !rows.length){ alert('Nothing to export — no rows match the current filters.'); return; }
   const wb = XLSX.utils.book_new();
@@ -3258,6 +3266,7 @@ function exportRowsToExcel(rows, filename, sheetName){
 function exportSheetsToExcel(sheets, filename){
   // sheets: [{name, rows}, ...] — multi-sheet export for pages with more
   // than one logical table (e.g. Rejected Requests + Rejected Transfers).
+  if(takePdfMode()) return exportSectionsToPdf(sheets, pdfName(filename), titleFromFilename(filename));
   if(typeof XLSX === 'undefined'){ alert('The export library has not fully loaded yet. Please try again in a few seconds.'); return; }
   const nonEmpty = sheets.filter(s=>s.rows && s.rows.length);
   if(!nonEmpty.length){ alert('Nothing to export — no rows match the current filters.'); return; }
@@ -3270,13 +3279,14 @@ function exportSheetsToExcel(sheets, filename){
   URL.revokeObjectURL(url);
 }
 
-async function exportAnalyticsReport(){
-  const btn = document.getElementById('exportAnalyticsBtn');
+async function exportAnalyticsReport(asPdf){
+  asPdf = asPdf===true;
+  const btn = document.getElementById(asPdf ? 'exportAnalyticsPdfBtn' : 'exportAnalyticsBtn');
   const originalLabel = btn.textContent;
   btn.disabled = true; btn.textContent = 'Preparing report...';
+  await new Promise(r=>setTimeout(r,30)); // let the "Preparing" label show
   try{
-    if(typeof XLSX === 'undefined'){ alert('The export library has not fully loaded yet. Please try again in a few seconds.'); return; }
-    const wb = XLSX.utils.book_new();
+    const sheets = [];
 
     const totalStock = DATA.inventory.reduce((s,r)=>s+r.qty,0);
     const totalBeg = DATA.inventory.reduce((s,r)=>s+r.beginningStock,0);
@@ -3300,7 +3310,7 @@ async function exportAnalyticsReport(){
       {Metric:'Total requests logged', Value:DATA.requests.length},
       {Metric:'Total transfers logged', Value:DATA.transfers.length},
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary');
+    sheets.push({name:'Summary', rows:summaryRows});
 
     const invRows = DATA.posmMaster.map(p=>{
       const row = {'POSM Code':p.code, 'Description':p.desc, 'Type':p.type, 'Business Unit':buLabel(p.bu), 'Status':p.status};
@@ -3309,14 +3319,14 @@ async function exportAnalyticsReport(){
       row['Total Qty']=total; row['Beginning Stock']=beg; row['Variance']=total-beg;
       return row;
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invRows), 'Full Inventory');
+    sheets.push({name:'All Inventory', rows:invRows});
 
     const txnRows = DATA.transactions.map(t=>({
       Date:t.date, Type:t.type, 'POSM Code':t.posmCode, Description:(posmByCode(t.posmCode)||{}).desc||'',
       Warehouse:(whById(t.warehouseId)||{}).name||'', 'Qty Change':(t.type==='in'||t.type==='transfer_in'?'+':'-')+t.qty,
       Reason:t.reason, Reference:t.ref||'', 'Has Receipt Photo':t.receiptImage?'Yes':'No'
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txnRows), 'Stock Movements');
+    sheets.push({name:'Stock Movements', rows:txnRows});
 
     const reqRows = DATA.requests.map(r=>{
       let timeliness;
@@ -3328,27 +3338,27 @@ async function exportAnalyticsReport(){
         Qty:r.qty, Warehouse:(whById(r.warehouseId)||{}).name||'', Store:r.store, 'Trade Supervisor':r.ts, Purpose:r.purpose||'',
         Status:r.status, 'Date Created':r.dateCreated, 'Due Date':r.dueDate||'', 'Date Delivered':r.dateDelivered||'', Timeliness:timeliness};
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reqRows), 'Requests');
+    sheets.push({name:'Requests', rows:reqRows});
 
     const trfRows = DATA.transfers.map(t=>({
       'Transfer ID':t.id, 'POSM Code':t.posmCode, 'Description':(posmByCode(t.posmCode)||{}).desc||'',
       Qty:t.qty, From:(whById(t.fromWarehouseId)||{}).name||'', To:(whById(t.toWarehouseId)||{}).name||'',
       Status:t.status, 'Date Created':t.dateCreated, 'Date Completed':t.dateCompleted||''
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trfRows), 'Transfers');
+    sheets.push({name:'Transfers', rows:trfRows});
 
     const weeklyRows = weeklyMetrics(8).map(w=>({Week:w.label, 'Requests Created':w.created, Delivered:w.delivered, Late:w.late, 'On-time Rate %':w.rate}));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(weeklyRows), 'Weekly Metrics');
+    sheets.push({name:'Weekly Metrics', rows:weeklyRows});
 
     const monthlyRows = monthlyMetrics(6).map(m=>({Month:m.label, 'Requests Created':m.created, Delivered:m.delivered, Late:m.late, 'On-time Rate %':m.rate}));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlyRows), 'Monthly Metrics');
+    sheets.push({name:'Monthly Metrics', rows:monthlyRows});
 
     const begRows = WAREHOUSES.map(w=>{
       const rows = DATA.inventory.filter(r=>r.warehouseId===w.id);
       const beg = rows.reduce((s,r)=>s+r.beginningStock,0), cur = rows.reduce((s,r)=>s+r.qty,0);
       return {Warehouse:w.name, Region:w.region, 'Beginning Stock':beg, 'Current Stock':cur, Variance:cur-beg};
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(begRows), 'Beginning Stock');
+    sheets.push({name:'Beginning Stock', rows:begRows});
 
     const moveRows = DATA.posmMaster.map(p=>{
       const outTxns = DATA.transactions.filter(t=>t.type==='out' && t.posmCode===p.code && t.reason.includes('Dispatched') && new Date(t.date) >= new Date(Date.now()-60*86400000));
@@ -3356,23 +3366,19 @@ async function exportAnalyticsReport(){
       const cat = events>=3?'Fast Moving':events>=1?'Low Moving':'Non-Moving';
       return {'POSM Code':p.code, Description:p.desc, Category:cat, 'Dispatch Events (60d)':events, 'Qty Dispatched (60d)':outQty, 'Current Stock':totalQtyForPosm(p.code,'all')};
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moveRows), 'Movement Analysis');
+    sheets.push({name:'Movement Analysis', rows:moveRows});
 
     const tsRows = activeTsList().map(t=>({Name:t.name, Region:t.region, Stores: activeStoreList().filter(s=>s.tsId===t.id).length}));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tsRows), 'Trade Supervisors');
+    sheets.push({name:'Trade Supervisors', rows:tsRows});
 
     const storeRowsExport = activeStoreList().map(s=>{ const t = tsById(s.tsId); return {Store:s.name, 'Trade Supervisor':t?t.name:'', Region:s.region, Dealer:s.dealer||''}; });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(storeRowsExport), 'Stores');
+    sheets.push({name:'Stores', rows:storeRowsExport});
 
     const orgChangeRows = (DATA.orgChanges||[]).map(o=>({Date:o.date, 'Entity Type':o.entityType, Action:o.action, 'Entity ID':o.entityId, Details:o.details, 'Performed By':o.performedBy}));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(orgChangeRows.length?orgChangeRows:[{Date:'',  'Entity Type':'', Action:'', 'Entity ID':'', Details:'No changes logged yet', 'Performed By':''}]), 'Org Changes Log');
+    sheets.push({name:'Org Changes Log', rows:orgChangeRows.length?orgChangeRows:[{Date:'',  'Entity Type':'', Action:'', 'Entity ID':'', Details:'No changes logged yet', 'Performed By':''}]});
 
-    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-    const blob = new Blob([wbout], {type:'application/octet-stream'});
-    const filename = 'RMAS-POSM-Analytics-'+todayStr()+'.xlsx';
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    if(asPdf) exportSectionsToPdf(sheets, 'RMAS-POSM-Analytics-'+todayStr()+'.pdf', 'Analytics Report');
+    else exportSheetsToExcel(sheets, 'RMAS-POSM-Analytics-'+todayStr()+'.xlsx');
   } finally {
     btn.disabled = false; btn.textContent = originalLabel;
   }
@@ -3646,6 +3652,332 @@ const LIB_SOURCES = {
     'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js']},
 };
 const libPromises = {};
+
+/* ============================= PDF EXPORT =============================
+   Built-in PDF writer (no extra library / no internet needed). Every
+   "⬇ Excel" button automatically gets a "⬇ PDF" twin that runs the same
+   export but writes a PDF table instead. */
+let EXPORT_MODE = 'excel', exportModeTimer = null, pairQueued = false;
+function setExportModePdf(){ EXPORT_MODE = 'pdf'; clearTimeout(exportModeTimer); exportModeTimer = setTimeout(()=>{ EXPORT_MODE = 'excel'; }, 15000); }
+function takePdfMode(){ const m = EXPORT_MODE==='pdf'; EXPORT_MODE = 'excel'; clearTimeout(exportModeTimer); return m; }
+function pdfName(f){ return String(f||'Report.xlsx').replace(/\.xlsx?$/i,'') + '.pdf'; }
+function titleFromFilename(f){ return String(f||'Report').replace(/\.xlsx?$/i,'').replace(/-?\d{4}-\d{2}-\d{2}$/,'').replace(/-/g,' ').trim() || 'Report'; }
+function pairPdfButtons(){
+  document.querySelectorAll('button').forEach(b=>{
+    if(b.dataset.pdfPaired) return;
+    if(!/^⬇\s*Excel$/.test(b.textContent.trim())) return;
+    b.dataset.pdfPaired = '1';
+    b.addEventListener('click', e=>{ if(e.isTrusted) EXPORT_MODE = 'excel'; }, true);
+    const pdfBtn = document.createElement('button');
+    pdfBtn.type = 'button'; pdfBtn.className = b.className; pdfBtn.textContent = '⬇ PDF'; pdfBtn.title = 'Download as PDF';
+    pdfBtn.dataset.pdfPaired = '1';
+    pdfBtn.addEventListener('click', ()=>{ setExportModePdf(); b.click(); });
+    const wrap = document.createElement('span'); wrap.className = 'xl-pair';
+    b.parentNode.insertBefore(wrap, b); wrap.appendChild(b); wrap.appendChild(pdfBtn);
+  });
+}
+new MutationObserver(()=>{ if(pairQueued) return; pairQueued = true; requestAnimationFrame(()=>{ pairQueued = false; pairPdfButtons(); }); })
+  .observe(document.body, {childList:true, subtree:true});
+
+const PDF_WINANSI = {'€':128,'‚':130,'ƒ':131,'„':132,'…':133,'†':134,'‡':135,'ˆ':136,'‰':137,'Š':138,'‹':139,'Œ':140,'Ž':142,'‘':145,'’':146,'“':147,'”':148,'•':149,'–':150,'—':151,'˜':152,'™':153,'š':154,'›':155,'œ':156,'ž':158,'Ÿ':159};
+function pdfClean(str){
+  let out = '';
+  for(const ch of String(str==null?'':str)){
+    const c = ch.codePointAt(0);
+    if((c>=32 && c<127) || (c>=160 && c<=255) || PDF_WINANSI[ch]) out += ch;
+    else if(ch==='\n' || ch==='\t' || ch==='\r') out += ' ';
+    else if(ch==='₱') out += 'PHP ';
+    else if(ch==='→') out += '->';
+    else if(ch==='✓' || ch==='✅') out += 'OK';
+    // anything else (emoji etc.) is dropped
+  }
+  return out.replace(/\s+/g,' ').trim();
+}
+function pdfEncode(str){
+  let out = '';
+  for(const ch of str){
+    const c = ch.codePointAt(0);
+    if(ch==='\\' || ch==='(' || ch===')') out += '\\' + ch;
+    else if(c < 256) out += String.fromCharCode(c);
+    else out += String.fromCharCode(PDF_WINANSI[ch] || 63);
+  }
+  return out;
+}
+let _pdfCtx = null;
+function pdfMeasure(t, bold){
+  if(!_pdfCtx) _pdfCtx = document.createElement('canvas').getContext('2d');
+  _pdfCtx.font = (bold?'bold ':'') + '100px Helvetica, Arial, "Liberation Sans", sans-serif';
+  return _pdfCtx.measureText(t).width / 100;
+}
+class MiniPDF {
+  constructor(landscape){ this.W = landscape ? 841.89 : 595.28; this.H = landscape ? 595.28 : 841.89; this.pages = []; this.images = []; this.addPage(); }
+  addPage(){ this.cur = []; this.pages.push(this.cur); return this; }
+  col(hex){
+    let h = String(hex||'#000').replace('#',''); if(h.length===3) h = h.split('').map(c=>c+c).join('');
+    const n = parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255].map(v=>(v/255).toFixed(3)).join(' ');
+  }
+  rect(x,y,w,h,fill,stroke,lw){
+    let c = ''; if(fill) c += this.col(fill)+' rg '; if(stroke) c += this.col(stroke)+' RG '+(lw||0.6)+' w ';
+    c += `${x.toFixed(2)} ${(this.H-y-h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re ${fill&&stroke?'B':(fill?'f':'S')}`;
+    this.cur.push(c);
+  }
+  line(x1,y1,x2,y2,color,lw){ this.cur.push(`${this.col(color||'#D1D5DB')} RG ${lw||0.5} w ${x1.toFixed(2)} ${(this.H-y1).toFixed(2)} m ${x2.toFixed(2)} ${(this.H-y2).toFixed(2)} l S`); }
+  width(t,size,bold){ return pdfMeasure(t,bold) * size; }
+  fit(t,size,bold,maxW){
+    if(this.width(t,size,bold) <= maxW) return t;
+    let lo = 0, hi = t.length;
+    while(lo < hi){ const mid = (lo+hi+1)>>1; if(this.width(t.slice(0,mid)+'…',size,bold) <= maxW) lo = mid; else hi = mid-1; }
+    return lo>0 ? t.slice(0,lo).trimEnd()+'…' : '';
+  }
+  text(str,x,y,o){
+    o = o || {}; const size = o.size || 10;
+    let t = pdfClean(str); if(o.maxW) t = this.fit(t,size,o.bold,o.maxW);
+    if(!t) return 0;
+    const w = this.width(t,size,o.bold);
+    const xx = o.align==='right' ? x-w : (o.align==='center' ? x-w/2 : x);
+    this.cur.push(`BT /${o.bold?'F2':'F1'} ${size} Tf ${this.col(o.color||'#111827')} rg ${xx.toFixed(2)} ${(this.H-y).toFixed(2)} Td (${pdfEncode(t)}) Tj ET`);
+    return w;
+  }
+  image(dataUrl,x,y,w,h,pxW,pxH){
+    const name = 'Im' + (this.images.length+1);
+    this.images.push({name, data: atob(dataUrl.split(',')[1]), pxW, pxH});
+    this.cur.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${(this.H-y-h).toFixed(2)} cm /${name} Do Q`);
+  }
+  output(){
+    const objs = [null, null];
+    const add = o => { objs.push(o); return objs.length; };
+    const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+    const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    const imgIds = this.images.map(im => add(`<< /Type /XObject /Subtype /Image /Width ${im.pxW} /Height ${im.pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.data.length} >>\nstream\n${im.data}\nendstream`));
+    const xo = this.images.map((im,i)=>`/${im.name} ${imgIds[i]} 0 R`).join(' ');
+    const res = `<< /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xo ? ' /XObject << '+xo+' >>' : ''} >>`;
+    const total = this.pages.length, kids = [];
+    this.pages.forEach((pg,i)=>{
+      const content = pg.join('\n').replace(/%%PAGE%%/g, String(i+1)).replace(/%%TOTAL%%/g, String(total));
+      const cid = add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+      kids.push(add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${this.W.toFixed(2)} ${this.H.toFixed(2)}] /Resources ${res} /Contents ${cid} 0 R >>`));
+    });
+    objs[0] = '<< /Type /Catalog /Pages 2 0 R >>';
+    objs[1] = `<< /Type /Pages /Kids [${kids.map(k=>k+' 0 R').join(' ')}] /Count ${kids.length} >>`;
+    let out = '%PDF-1.4\n%âãÏÓ\n'; const offs = [];
+    objs.forEach((o,i)=>{ offs.push(out.length); out += `${i+1} 0 obj\n${o}\nendobj\n`; });
+    const xref = out.length;
+    out += `xref\n0 ${objs.length+1}\n0000000000 65535 f \n` + offs.map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('');
+    out += `trailer\n<< /Size ${objs.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    const bytes = new Uint8Array(out.length);
+    for(let i=0;i<out.length;i++) bytes[i] = out.charCodeAt(i) & 255;
+    return new Blob([bytes], {type:'application/pdf'});
+  }
+  save(filename){
+    const url = URL.createObjectURL(this.output());
+    const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  }
+}
+function pdfScopeLabel(){
+  const parts = [];
+  if(!session) parts.push('Local');
+  else if(session.role==='admin') parts.push('Admin');
+  else parts.push((session.region||session.name) + ' account');
+  const reg = document.getElementById('globalRegionFilter'), bu = document.getElementById('globalBUFilter'), wh = document.getElementById('globalWarehouseFilter');
+  const label = el => el && el.selectedIndex>=0 && el.options[el.selectedIndex] ? el.options[el.selectedIndex].textContent : '';
+  if(!isRegionUser() && reg) parts.push(label(reg));
+  if(bu) parts.push(label(bu));
+  if(wh && wh.style.display!=='none') parts.push(label(wh));
+  return parts.filter(Boolean).join(' · ');
+}
+function pdfHeader(doc, title){
+  doc.rect(0,0,doc.W,56,'#15239E');
+  doc.text('RMAS POSM INVENTORY', 32, 22, {size:8.5, bold:true, color:'#AFC3FF'});
+  doc.text(title, 32, 42, {size:16, bold:true, color:'#FFFFFF', maxW: doc.W*0.55});
+  doc.text(pdfScopeLabel(), doc.W-32, 24, {size:8.5, color:'#DCE4FF', align:'right', maxW: doc.W*0.4});
+  doc.text(new Date().toLocaleString('en-PH',{dateStyle:'medium', timeStyle:'short'}), doc.W-32, 40, {size:8.5, color:'#DCE4FF', align:'right'});
+  return 76;
+}
+function pdfContHeader(doc, title){
+  doc.text('RMAS POSM · ' + title, 32, 28, {size:9, bold:true, color:'#15239E', maxW: doc.W-64});
+  doc.line(32, 36, doc.W-32, 36, '#C7D2FE', 0.8);
+  return 48;
+}
+function pdfFooter(doc){
+  doc.line(32, doc.H-30, doc.W-32, doc.H-30, '#E5E7EB');
+  doc.text('Generated ' + new Date().toLocaleString('en-PH') + ' · ' + pdfScopeLabel(), 32, doc.H-17, {size:7.5, color:'#6B7280', maxW: doc.W-170});
+  doc.text('Page %%PAGE%% of %%TOTAL%%', doc.W-100, doc.H-17, {size:7.5, color:'#6B7280'});
+}
+function pdfCellText(v){
+  if(v===null || v===undefined) return '';
+  if(typeof v==='number') return v.toLocaleString('en-PH');
+  if(v instanceof Date) return v.toLocaleDateString('en-PH');
+  return String(v);
+}
+// Draws a full-width table that continues onto new pages; returns the y after it.
+function pdfTable(doc, y, columns, rows, opts){
+  opts = opts || {};
+  const x0 = 32, avail = doc.W-64, size = opts.size || 8, rowH = size+7, headH = size+10;
+  const sample = rows.slice(0, 300);
+  const align = columns.map(c => sample.length && sample.every(r=>{ const v = r[c]; return v===''||v===null||v===undefined||typeof v==='number'||/^[+-]?[\d,]+(\.\d+)?%?$/.test(String(v)); }) ? 'right' : 'left');
+  const nat = columns.map((c,i)=>{
+    let w = doc.width(pdfClean(c), size, true) + 12;
+    sample.forEach(r=>{ w = Math.max(w, doc.width(pdfClean(pdfCellText(r[c])), size, false) + 12); });
+    return Math.min(w, align[i]==='right' ? 90 : 230);
+  });
+  // Fit to the page: if too wide, trim only the widest columns (e.g. Description) so short
+  // columns like POSM codes and numbers stay fully readable; if narrower, stretch evenly.
+  const tot = nat.reduce((a,b)=>a+b,0);
+  let widths;
+  if(tot <= avail) widths = nat.map(w => w*avail/tot);
+  else {
+    let lo = 0, hi = Math.max(...nat);
+    for(let k=0;k<40;k++){ const mid=(lo+hi)/2; const sum = nat.reduce((a,w)=>a+Math.min(w,mid),0); if(sum>avail) hi=mid; else lo=mid; }
+    widths = nat.map(w => Math.min(w, lo));
+    const sum = widths.reduce((a,b)=>a+b,0);
+    widths = widths.map(w => w*avail/sum);
+  }
+  const head = ()=>{
+    doc.rect(x0, y, avail, headH, '#E8EDFF');
+    let x = x0;
+    columns.forEach((c,i)=>{ doc.text(c, align[i]==='right' ? x+widths[i]-6 : x+6, y+headH-6.5, {size, bold:true, color:'#1E2A78', maxW: widths[i]-10, align: align[i]==='right'?'right':undefined}); x += widths[i]; });
+    y += headH;
+  };
+  head();
+  rows.forEach((r,ri)=>{
+    if(y + rowH > doc.H-40){ pdfFooter(doc); doc.addPage(); y = pdfContHeader(doc, opts.title||''); head(); }
+    if(ri%2) doc.rect(x0, y, avail, rowH, '#F7F8FB');
+    let x = x0;
+    columns.forEach((c,i)=>{
+      const v = pdfCellText(r[c]);
+      const neg = align[i]==='right' && /^-/.test(v), pos = align[i]==='right' && /^\+/.test(v);
+      doc.text(v, align[i]==='right' ? x+widths[i]-6 : x+6, y+rowH-5, {size, maxW: widths[i]-10, align: align[i]==='right'?'right':undefined, color: neg?'#B42318':(pos?'#067647':'#111827')});
+      x += widths[i];
+    });
+    doc.line(x0, y+rowH, x0+avail, y+rowH, '#EEF0F4', 0.4);
+    y += rowH;
+  });
+  return y;
+}
+function exportSectionsToPdf(sections, filename, title){
+  const ne = (sections||[]).filter(s=>s && s.rows && s.rows.length);
+  if(!ne.length){ alert('Nothing to export — no rows match the current filters.'); return; }
+  const colsOf = s => [...new Set(s.rows.slice(0,300).flatMap(r=>Object.keys(r)))];
+  const maxCols = Math.max(...ne.map(s=>colsOf(s).length));
+  const doc = new MiniPDF(maxCols > 5);
+  let y = pdfHeader(doc, title);
+  ne.forEach(s=>{
+    const cols = colsOf(s);
+    const size = cols.length>14 ? 6 : cols.length>10 ? 6.8 : cols.length>7 ? 7.6 : 8.4;
+    if(y > doc.H-110){ pdfFooter(doc); doc.addPage(); y = pdfContHeader(doc, title); }
+    if(ne.length>1 || (s.name && s.name!==title)){
+      doc.text(s.name + '  (' + s.rows.length.toLocaleString() + ')', 32, y+6, {size:11, bold:true, color:'#15239E'});
+      y += 16;
+    }
+    y = pdfTable(doc, y, cols, s.rows, {title, size}) + 20;
+  });
+  pdfFooter(doc);
+  doc.save(filename);
+}
+
+/* ---------- Dashboard one-page report ---------- */
+function chartJpeg(id){
+  const c = document.getElementById(id);
+  if(!c || !c.width || !c.height) return null;
+  const t = document.createElement('canvas'); t.width = c.width; t.height = c.height;
+  const g = t.getContext('2d'); g.fillStyle = '#FFFFFF'; g.fillRect(0,0,t.width,t.height); g.drawImage(c,0,0);
+  try{ return {url: t.toDataURL('image/jpeg', 0.92), w: t.width, h: t.height}; }catch(e){ return null; }
+}
+function pdfBox(doc, x, y, w, h, title){
+  doc.rect(x, y, w, h, '#FFFFFF', '#E3E7EF', 0.7);
+  doc.text(title, x+10, y+15, {size:9, bold:true, color:'#1E2A78', maxW: w-20});
+}
+function pdfMiniTable(doc, x, y, w, cols, rows, maxRows){
+  // cols: [{label, key, frac, align}]
+  const size = 7.3, rowH = 12.5;
+  let cx = x; doc.rect(x, y, w, rowH, '#EEF2FF');
+  cols.forEach(c=>{ const cw = w*c.frac; doc.text(c.label, c.align==='right' ? cx+cw-4 : cx+4, y+9, {size, bold:true, color:'#1E2A78', maxW: cw-8, align:c.align}); cx += cw; });
+  y += rowH;
+  const shown = rows.slice(0, maxRows);
+  if(!shown.length){ doc.text('Nothing to show.', x+4, y+10, {size, color:'#6B7280'}); return; }
+  shown.forEach((r,i)=>{
+    if(i%2) doc.rect(x, y, w, rowH, '#F7F8FB');
+    let cx2 = x;
+    cols.forEach(c=>{ const cw = w*c.frac; const v = pdfCellText(r[c.key]); doc.text(v, c.align==='right' ? cx2+cw-4 : cx2+4, y+9, {size, maxW: cw-8, align:c.align, bold: !!c.bold, color: c.colorFn ? c.colorFn(r) : '#111827'}); cx2 += cw; });
+    y += rowH;
+  });
+  if(rows.length > maxRows) doc.text('+ ' + (rows.length-maxRows).toLocaleString() + ' more — see the full Excel/PDF export', x+4, y+10, {size:6.8, color:'#6B7280'});
+}
+function buildOnePageReport(){
+  const whFilter = currentFilterWarehouse(), buFilter = currentFilterBU();
+  const invRows = DATA.inventory.filter(r=> (whFilter==='all' || r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
+  const totalStock = invRows.reduce((s,r)=>s+r.qty,0), totalBeg = invRows.reduce((s,r)=>s+r.beginningStock,0);
+  const delta = totalBeg ? ((totalStock-totalBeg)/totalBeg*100) : 0;
+  const disposeItems = DATA.posmMaster.filter(p=>(p.status==='expired'||p.status==='obsolete') && disposalRelevant(p, whFilter) && (buFilter==='all'||p.bu===buFilter));
+  const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && (p.status==='expired'||p.status==='obsolete') && (whFilter==='all'||r.warehouseId===whFilter) && (buFilter==='all'||p.bu===buFilter);}).reduce((s,r)=>s+r.qty,0);
+  const inWh = r => (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode);
+  const sorting = DATA.requests.filter(r=>r.status==='for_sorting' && inWh(r)).length;
+  const forDel = DATA.requests.filter(r=>r.status==='for_delivery' && inWh(r)).length;
+  const delivered7 = DATA.requests.filter(r=>r.status==='delivered' && r.dateDelivered && new Date(r.dateDelivered) >= new Date(Date.now()-7*86400000) && inWh(r)).length;
+  const overdue = getOverdueRequests().filter(inWh).length;
+  const ioAll = DATA.transactions.filter(t=>(whFilter==='all'||t.warehouseId===whFilter) && matchesBUFilter(t.posmCode));
+  const in30 = ioAll.filter(t=>(t.type==='in'||t.type==='transfer_in') && new Date(t.date) >= new Date(Date.now()-30*86400000)).reduce((s,t)=>s+Number(t.qty),0);
+  const out30 = ioAll.filter(t=>(t.type==='out'||t.type==='transfer_out') && new Date(t.date) >= new Date(Date.now()-30*86400000)).reduce((s,t)=>s+Number(t.qty),0);
+
+  const doc = new MiniPDF(true);
+  let y = pdfHeader(doc, 'Inventory One-Page Report');
+  // KPI tiles
+  const kpis = [
+    {l:'Total POSM Stock', v:totalStock.toLocaleString(), s:(delta>=0?'+':'')+delta.toFixed(1)+'% vs beginning', c: delta>=0?'#067647':'#B42318'},
+    {l:'Beginning Stock', v:totalBeg.toLocaleString(), s:(totalStock-totalBeg>=0?'+':'')+(totalStock-totalBeg).toLocaleString()+' net change', c:'#4B5563'},
+    {l:'Stock In / Out (30 days)', v:'+'+in30.toLocaleString()+' / -'+out30.toLocaleString(), s:'includes transfers', c:'#4B5563'},
+    {l:'For Disposal', v:disposeQty.toLocaleString(), s:disposeItems.length+' POSM type(s) expired/obsolete', c:'#B42318'},
+    {l:'Pending Requests', v:String(sorting+forDel), s:sorting+' for sorting · '+forDel+' for delivery', c:'#B54708'},
+    {l:'Delivered (7 days)', v:String(delivered7), s: overdue ? overdue+' delivery(ies) OVERDUE' : 'no overdue deliveries', c: overdue?'#B42318':'#067647'},
+  ];
+  const gap = 8, kw = (doc.W-64-gap*5)/6, kh = 58;
+  kpis.forEach((k,i)=>{
+    const x = 32 + i*(kw+gap);
+    doc.rect(x, y, kw, kh, '#FFFFFF', '#E3E7EF', 0.7);
+    doc.rect(x, y, 3, kh, '#15239E');
+    doc.text(k.l, x+10, y+14, {size:7.6, bold:true, color:'#6B7280', maxW: kw-16});
+    doc.text(k.v, x+10, y+34, {size: k.v.length>12 ? 12 : 17, bold:true, color:'#0F172A', maxW: kw-16});
+    doc.text(k.s, x+10, y+49, {size:7, color:k.c, maxW: kw-16});
+  });
+  y += kh + 10;
+  // Charts
+  const cw = (doc.W-64-gap*2)/3, ch = 168;
+  [['chartWhStock','Stock Level per Warehouse'],['chartMoveSplit','POSM Movement Split (60 days)'],['chartWeeklyTrend','Weekly Delivery Trend (8 weeks)']].forEach(([id,title],i)=>{
+    const x = 32 + i*(cw+gap);
+    pdfBox(doc, x, y, cw, ch, title);
+    const img = chartJpeg(id);
+    if(img){
+      const bw = cw-16, bh = ch-28; const sc = Math.min(bw/img.w, bh/img.h);
+      const w = img.w*sc, h = img.h*sc;
+      doc.image(img.url, x+8+(bw-w)/2, y+22+(bh-h)/2, w, h, img.w, img.h);
+    } else doc.text('Chart not available', x+10, y+ch/2, {size:8, color:'#9CA3AF'});
+  });
+  y += ch + 10;
+  // Tables
+  const th = doc.H - 40 - y, tw = cw;
+  const whRows = WAREHOUSES.map(w=>{
+    const rows = DATA.inventory.filter(r=>r.warehouseId===w.id && (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
+    const cur = rows.reduce((s,r)=>s+r.qty,0), beg = rows.reduce((s,r)=>s+r.beginningStock,0);
+    return {name:w.name, cur, beg, v:(cur-beg>=0?'+':'')+(cur-beg).toLocaleString(), vn:cur-beg};
+  }).filter(r=> whFilter==='all' || r.cur || r.beg).sort((a,b)=>b.cur-a.cur);
+  const maxRows = Math.max(3, Math.floor((th-30)/12.5) - 1);
+  pdfBox(doc, 32, y, tw, th, 'Stock per Warehouse');
+  pdfMiniTable(doc, 40, y+22, tw-16, [
+    {label:'Warehouse', key:'name', frac:.46}, {label:'Current', key:'cur', frac:.18, align:'right', bold:true},
+    {label:'Beginning', key:'beg', frac:.18, align:'right'}, {label:'Change', key:'v', frac:.18, align:'right', colorFn:r=>r.vn<0?'#B42318':'#067647'}], whRows, maxRows);
+  const dispRows = disposeItems.map(p=>({code:p.code, desc:p.desc, status:p.status.charAt(0).toUpperCase()+p.status.slice(1), qty: totalQtyForPosm(p.code, whFilter)})).sort((a,b)=>b.qty-a.qty);
+  pdfBox(doc, 32+tw+gap, y, tw, th, 'Items Needing Disposal');
+  pdfMiniTable(doc, 40+tw+gap, y+22, tw-16, [
+    {label:'POSM', key:'code', frac:.24, bold:true}, {label:'Description', key:'desc', frac:.42}, {label:'Status', key:'status', frac:.17}, {label:'Qty', key:'qty', frac:.17, align:'right'}], dispRows, maxRows);
+  const act = buildActivityFeed().map(a=>({date: fmtDateShort(a.date), title: a.title, sub: a.sub}));
+  pdfBox(doc, 32+2*(tw+gap), y, tw, th, 'Recent Activity');
+  pdfMiniTable(doc, 40+2*(tw+gap), y+22, tw-16, [
+    {label:'Date', key:'date', frac:.16}, {label:'Activity', key:'title', frac:.44, bold:true}, {label:'Detail', key:'sub', frac:.40}], act, maxRows);
+  pdfFooter(doc);
+  doc.save('RMAS-POSM-One-Page-Report-' + todayStr() + '.pdf');
+}
+
 function loadLib(name){
   const lib = LIB_SOURCES[name];
   if(lib.test()) return Promise.resolve();
@@ -4120,7 +4452,8 @@ document.getElementById('globalBUFilter').addEventListener('change', ()=>{ rebui
 document.getElementById('globalWarehouseFilter').addEventListener('change', renderAll);
 document.getElementById('notifBell').addEventListener('click', toggleNotifPanel);
 document.getElementById('hamburgerBtn').addEventListener('click', ()=>document.getElementById('sidebar').classList.toggle('open'));
-document.getElementById('exportAnalyticsBtn').addEventListener('click', exportAnalyticsReport);
+document.getElementById('exportAnalyticsBtn').addEventListener('click', ()=>exportAnalyticsReport(false));
+document.getElementById('exportAnalyticsPdfBtn').addEventListener('click', ()=>exportAnalyticsReport(true));
 /* ============================= RESET TEST DATA (Admin, Google Sheets mode) =============================
    Clears every Stock In/Out, Request, Transfer and Pending/Rejected item and puts
    Current Stock back to Beginning Stock. POSM list, Beginning Stock, Warehouses,
