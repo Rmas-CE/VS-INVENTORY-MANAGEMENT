@@ -1900,7 +1900,7 @@ function renderDatalists(){
 /* ============================= MODAL HELPERS ============================= */
 function openModal(title, bodyHtml, footHtml, wide){
   const root = document.getElementById('modalRoot');
-  root.innerHTML = `<div class="modal-backdrop" id="modalBackdrop"><div class="modal"${wide?' style="max-width:560px;"':''}>
+  root.innerHTML = `<div class="modal-backdrop" id="modalBackdrop"><div class="modal"${wide==='xl' ? ' style="max-width:min(980px,96vw);"' : (wide?' style="max-width:560px;"':'')}>
       <div class="modal-head"><h3>${title}</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>
       <div class="modal-body">${bodyHtml}</div><div class="modal-foot">${footHtml}</div></div></div>`;
   document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
@@ -2255,18 +2255,93 @@ async function changeStatus(code, status){
 }
 
 /* ============================= RENDER: DASHBOARD ============================= */
+/* ---- Alert details: clicking an alert shows only the items behind it ---- */
+function alertThreshold(){ return (ALERTS && Number(ALERTS.lowStockThreshold)) || 15; }
+// Active POSM whose total stock (in the current view: region / BU / warehouse filter) is at or below the reorder level.
+function alertLowStockList(){
+  const th = alertThreshold(), whF = currentFilterWarehouse();
+  return DATA.posmMaster.filter(p=>p.status==='active' && matchesBUFilter(p.code))
+    .map(p=>({p, qty: totalQtyForPosm(p.code, whF)}))
+    .filter(x=>x.qty <= th)
+    .sort((a,b)=>a.qty-b.qty || a.p.code.localeCompare(b.p.code));
+}
+function alertDueRequests(kind){
+  const today = todayStr(), in3 = addDays(today, 3), whF = currentFilterWarehouse();
+  return DATA.requests.filter(r=> r.status==='for_delivery' && r.dueDate && (whF==='all' || r.warehouseId===whF) &&
+      (kind==='overdue' ? String(r.dueDate) < today : (String(r.dueDate) >= today && String(r.dueDate) <= in3)))
+    .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+}
+function stockWhere(code){
+  const rows = DATA.inventory.filter(r=>r.posmCode===code && r.qty>0).sort((a,b)=>b.qty-a.qty);
+  if(!rows.length) return '<span style="color:var(--danger);font-weight:600;">Out of stock everywhere</span>';
+  return rows.slice(0,3).map(r=>{ const w = whById(r.warehouseId); return escHtml(w?w.name:r.warehouseId)+' <b>'+r.qty.toLocaleString()+'</b>'; }).join(' · ') + (rows.length>3 ? ` · <span class="cell-sub">+${rows.length-3} more</span>` : '');
+}
+function openAlertDetail(kind){
+  const scopeTxt = escHtml(pdfScopeLabel());
+  let title='', intro='', table='', exportRows=[], exportName='', goBtn='';
+  if(kind==='lowstock'){
+    const list = alertLowStockList(), th = alertThreshold();
+    const out = list.filter(x=>x.qty<=0).length;
+    title = `Low Stock — ${list.length} POSM`;
+    intro = `Active POSM with <b>${th} pcs or less</b> in total${out?` — <b style="color:var(--danger);">${out} are out of stock</b>`:''}. Lowest first.`;
+    table = `<table class="inv-table"><thead><tr><th>POSM</th><th>BU</th><th style="text-align:right;">Qty left</th><th>Where the stock is</th></tr></thead><tbody>
+      ${list.map(x=>`<tr><td><div class="row-flex">${tile(x.p,30)}<div><div class="cell-main">${x.p.code}</div><div class="cell-sub">${x.p.desc}</div></div></div></td>
+        <td>${buLabel(x.p.bu)}</td>
+        <td style="text-align:right;"><span class="badge ${x.qty<=0?'expired':'obsolete'}">${x.qty<=0?'Out of stock':x.qty.toLocaleString()+' pcs'}</span></td>
+        <td style="font-size:12px;">${stockWhere(x.p.code)}</td></tr>`).join('')}
+      </tbody></table>`;
+    exportRows = list.map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Type:x.p.type, 'Business Unit':buLabel(x.p.bu), 'Qty Left':x.qty, 'Reorder Level':th,
+      'Per Warehouse': DATA.inventory.filter(r=>r.posmCode===x.p.code && r.qty>0).map(r=>((whById(r.warehouseId)||{}).name||r.warehouseId)+': '+r.qty).join(', ')}));
+    exportName = 'Low-Stock';
+    loadImagesFor(list.slice(0,60).map(x=>x.p.code));
+  } else if(kind==='overdue' || kind==='duesoon'){
+    const list = alertDueRequests(kind), today = todayStr();
+    title = kind==='overdue' ? `Overdue Deliveries — ${list.length}` : `Due Within 3 Days — ${list.length}`;
+    intro = kind==='overdue' ? 'Requests in <b>For Delivery</b> that passed their due date (7 days after approval). Oldest first.' : 'Requests in <b>For Delivery</b> that are due in the next 3 days.';
+    table = `<table class="inv-table"><thead><tr><th>Request</th><th>POSM</th><th>Store / TS</th><th>Warehouse</th><th>Due</th></tr></thead><tbody>
+      ${list.map(r=>{ const p = posmByCode(r.posmCode), w = whById(r.warehouseId);
+        const days = Math.round((new Date(today) - new Date(r.dueDate))/86400000);
+        const tag = kind==='overdue' ? `<span class="badge expired">${days} day${days!==1?'s':''} late</span>` : `<span class="badge obsolete">${days===0?'Today':'in '+(-days)+' day'+(-days!==1?'s':'')}</span>`;
+        return `<tr><td class="cell-sub">${r.id}</td><td><div class="cell-main">${r.posmCode} × ${r.qty}</div><div class="cell-sub">${p?p.desc:''}</div></td>
+          <td><div>${r.store}</div><div class="cell-sub">${r.ts||''}</div></td><td class="cell-sub">${w?w.name:r.warehouseId}</td>
+          <td><div style="white-space:nowrap;">${fmtDate(r.dueDate)}</div>${tag}</td></tr>`; }).join('')}
+      </tbody></table>`;
+    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Due Date':r.dueDate}));
+    exportName = kind==='overdue' ? 'Overdue-Deliveries' : 'Due-Soon-Deliveries';
+    goBtn = `<button class="btn" id="alGo" data-go="requests">Open Requests board</button>`;
+  } else if(kind==='pendingList'){
+    const list = (DATA.pendingActions||[]).filter(x=>x.status==='pending').sort((a,b)=>String(a.submittedAt).localeCompare(String(b.submittedAt)));
+    title = `Awaiting Approval — ${list.length}`;
+    intro = 'Submissions from Region accounts waiting for your approval. Oldest first.';
+    table = `<table class="inv-table"><thead><tr><th>Type</th><th>Details</th><th>Submitted by</th><th>When</th></tr></thead><tbody>
+      ${list.map(x=>`<tr><td><span class="badge active">${pendingActionTypeLabel(x.action)}</span></td><td style="font-size:12.5px;">${describePendingAction(x)}</td><td>${x.submittedBy}</td><td class="cell-sub" style="white-space:nowrap;">${fmtDate(x.submittedAt)}</td></tr>`).join('')}
+      </tbody></table>`;
+    exportRows = list.map(x=>({Type:pendingActionTypeLabel(x.action), Details:describePendingAction(x).replace(/<[^>]+>/g,''), 'Submitted By':x.submittedBy, 'Submitted At':x.submittedAt}));
+    exportName = 'Pending-Approvals';
+    goBtn = `<button class="btn primary" id="alGo" data-go="pending">Review in Pending Approvals</button>`;
+  }
+  openModal(title, `
+    <p class="login-note" style="margin-top:0;">${intro}<br><span class="cell-sub">View: ${scopeTxt}</span></p>
+    ${exportRows.length ? `<div class="table-wrap scroll-y" style="max-height:58vh;">${table}</div>` : '<div class="empty-state">Nothing here right now.</div>'}
+  `, `<button class="btn ghost" onclick="closeModal()">Close</button>${exportRows.length ? `<button class="btn" id="alExcel">${icon('download',13)} Excel</button>` : ''}${goBtn}`, 'xl');
+  const ex = document.getElementById('alExcel');
+  if(ex) ex.addEventListener('click', ()=> exportRowsToExcel(exportRows, exportName+'-'+todayStr()+'.xlsx', title.split(' — ')[0]));
+  const go = document.getElementById('alGo');
+  if(go) go.addEventListener('click', ()=>{ closeModal(); currentSection = go.dataset.go; renderAll(); });
+  mobileizeTables();
+}
 function renderAlertPanel(){
   if(!ALERTS) return '';
   const items = [];
-  if(ALERTS.pendingCount && session && session.role==='admin') items.push({icon:'clock', color:'warning', label:`${ALERTS.pendingCount} action(s) awaiting approval`, nav:'pending'});
-  // When a Region/BU filter is on, count only the deliveries that belong to it.
-  const scoped = DATA_ALL && DATA!==DATA_ALL;
-  const reqIds = scoped ? new Set(DATA.requests.map(r=>r.id)) : null;
-  const overdueN = scoped && ALERTS.overdueItems ? ALERTS.overdueItems.filter(r=>reqIds.has(r.id)).length : ALERTS.overdueCount;
-  const dueSoonN = scoped && ALERTS.dueSoonItems ? ALERTS.dueSoonItems.filter(r=>reqIds.has(r.id)).length : ALERTS.dueSoonCount;
-  if(overdueN) items.push({icon:'alert', color:'danger', label:`${overdueN} delivery(ies) OVERDUE`, nav:'metrics'});
-  if(dueSoonN) items.push({icon:'clock', color:'warning', label:`${dueSoonN} delivery(ies) due within 3 days`, nav:'metrics'});
-  if(ALERTS.lowStockCount) items.push({icon:'box', color:'danger', label:`${ALERTS.lowStockCount} POSM item(s) at or below ${ALERTS.lowStockThreshold} units — consider reordering`, nav:'inventory'});
+  if(ALERTS.pendingCount && session && session.role==='admin') items.push({icon:'clock', color:'warning', label:`${ALERTS.pendingCount} action(s) awaiting approval`, nav:'pendingList'});
+  // Counted from the full data of the current view (region / BU / warehouse), so the number
+  // always matches the list that opens when the alert is clicked.
+  const overdueN = alertDueRequests('overdue').length;
+  const dueSoonN = alertDueRequests('duesoon').length;
+  if(overdueN) items.push({icon:'alert', color:'danger', label:`${overdueN} delivery(ies) OVERDUE`, nav:'overdue'});
+  if(dueSoonN) items.push({icon:'clock', color:'warning', label:`${dueSoonN} delivery(ies) due within 3 days`, nav:'duesoon'});
+  const low = alertLowStockList();
+  if(low.length) items.push({icon:'box', color:'danger', label:`${low.length} POSM item(s) at or below ${alertThreshold()} units — consider reordering`, nav:'lowstock'});
   if(!items.length){
     return `<div class="notice" style="background:var(--success-bg);border-color:color-mix(in srgb, var(--success) 30%, transparent);color:var(--success);">${icon('check',16)}<div><b>All clear</b> — no pending approvals, overdue deliveries, or low-stock items right now.</div></div>`;
   }
@@ -2347,7 +2422,7 @@ function renderDashboard(){
     else if(go==='delivered'){ currentSection='metrics'; }
     renderAll(); window.scrollTo(0,0);
   }));
-  document.querySelectorAll('[data-alert-nav]').forEach(b=>b.addEventListener('click',()=>{currentSection=b.dataset.alertNav; renderAll();}));
+  document.querySelectorAll('[data-alert-nav]').forEach(b=>b.addEventListener('click',()=>openAlertDetail(b.dataset.alertNav)));
   const exportAlertsBtn = document.getElementById('btnExportAlerts');
   if(exportAlertsBtn) exportAlertsBtn.addEventListener('click', ()=>{
     if(!ALERTS) return;
@@ -2355,7 +2430,7 @@ function renderDashboard(){
       {name:'Pending Approvals', rows:(ALERTS.pendingItems||[]).map(p=>({ID:p.id, Action:p.action, 'Submitted By':p.submittedBy, 'Submitted At':p.submittedAt}))},
       {name:'Overdue Deliveries', rows:(ALERTS.overdueItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
       {name:'Due Soon (3 days)', rows:(ALERTS.dueSoonItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
-      {name:'Low Stock (Reorder)', rows:(ALERTS.lowStockItems||[]).map(p=>({'POSM Code':p.code, Description:p.desc, 'Business Unit':buLabel(p.bu), 'Current Qty':p.qty, Threshold:ALERTS.lowStockThreshold}))},
+      {name:'Low Stock (Reorder)', rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, 'Business Unit':buLabel(x.p.bu), 'Current Qty':x.qty, Threshold:alertThreshold()}))},
     ], 'Alerts-'+todayStr()+'.xlsx');
   });
   document.getElementById('btnExportActivity').addEventListener('click', ()=>{
