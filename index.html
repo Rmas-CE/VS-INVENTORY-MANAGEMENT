@@ -56,7 +56,7 @@ if(!window.XLSX) document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@
 </script>
 <style>
 :root{--vh:1vh;
-  --bg:#F1F3F7; --surface:#FFFFFF; --surface-alt:#F7F8FB; --ink:#161A24; --ink-soft:#5B6272; --ink-faint:#9199AA;
+  --bg:#F1F3F7; --surface:#FFFFFF; --surface-alt:#F7F8FB; --ink:#161A24; --ink-soft:#5B6272; --ink-faint:#6B7385;
   --line:#E3E6ED; --primary:#15239E; --primary-ink:#0D1970; --primary-tint:#EAEDFB; --accent:#0A87C4;
   --success:#1B8A5A; --success-bg:#E5F5EC; --warning:#B4780F; --warning-bg:#FBF0DA; --danger:#C43B3B; --danger-bg:#FBEAEA;
   --radius-sm:6px; --radius:10px; --radius-lg:14px; --shadow: 0 1px 2px rgba(20,23,34,.06), 0 1px 1px rgba(20,23,34,.04);
@@ -83,6 +83,9 @@ a{color:var(--primary);}
 #app{display:flex;min-height:100vh;}
 .sidebar{width:236px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;transition:transform .2s ease;}
 .brand{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:4px 10px 18px;}
+.sidebar .brand{flex-direction:row;text-align:left;align-items:center;gap:11px;padding:2px 8px 16px;}
+.sidebar .brand-mark{width:40px !important;border-radius:11px;box-shadow:0 3px 10px rgba(21,80,230,.22);}
+.sidebar .brand-text strong{font-size:15px;}
 .brand-mark{width:110px;height:auto;aspect-ratio:1/1;max-width:100%;display:block;object-fit:cover;background:#1a3fc4;border:none;border-radius:22%;overflow:hidden;flex-shrink:0;pointer-events:none;box-shadow:0 6px 18px rgba(21,80,230,.28);}
 .login-card .brand-mark{width:140px;}
 .brand-text{line-height:1.25;} .brand-text strong{display:block;font-size:15px;font-weight:700;letter-spacing:.01em;} .brand-text span{font-size:11.5px;color:var(--ink-faint);}
@@ -95,6 +98,27 @@ a{color:var(--primary);}
 .sidebar-footer{margin-top:auto;padding-top:14px;border-top:1px solid var(--line);}
 .mini-btn{width:100%;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--surface-alt);color:var(--ink-soft);font-size:12px;font-weight:500;margin-top:6px;}
 .mini-btn:hover{color:var(--ink);}
+.mini-btn, .sm-item, .settings-toggle{display:flex;align-items:center;justify-content:center;gap:8px;}
+.logout-btn{background:none;border-color:transparent;color:var(--danger);margin-top:4px;}
+.logout-btn:hover{background:var(--danger-bg);color:var(--danger);}
+.settings-wrap{position:relative;margin-top:6px;}
+.settings-toggle{width:100%;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;justify-content:flex-start;}
+.settings-toggle:hover, .settings-toggle[aria-expanded="true"]{border-color:color-mix(in srgb, var(--primary) 45%, var(--line));background:var(--primary-tint);color:var(--primary-ink);}
+.settings-toggle .st-label{flex:1;text-align:left;}
+.settings-toggle .st-chev{display:inline-flex;transition:transform .15s;transform:rotate(180deg);}
+.settings-toggle[aria-expanded="true"] .st-chev{transform:rotate(0deg);}
+.settings-menu{position:absolute;left:0;right:0;bottom:calc(100% + 8px);z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 40px rgba(16,24,40,.18);padding:6px;max-height:min(70vh,520px);overflow-y:auto;}
+.settings-menu[hidden]{display:none;}
+.sm-group{padding:4px 0;}
+.sm-group + .sm-group{border-top:1px solid var(--line);}
+.sm-label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);padding:6px 10px 4px;}
+.sm-item{width:100%;justify-content:flex-start;padding:8px 10px;border:none;background:none;border-radius:9px;color:var(--ink);font-size:13px;font-weight:500;cursor:pointer;text-align:left;}
+.sm-item:hover{background:var(--surface-alt);}
+.sm-item svg{color:var(--ink-soft);flex-shrink:0;}
+.sm-danger, .sm-danger svg{color:var(--danger);}
+.sm-danger:hover{background:var(--danger-bg);}
+.sm-version{font-size:10.5px;color:var(--ink-faint);text-align:center;padding:8px 6px 4px;border-top:1px solid var(--line);}
+body.mobile-app .settings-menu{position:static;box-shadow:none;margin-bottom:8px;max-height:none;}
 .main{flex:1;min-width:0;display:flex;flex-direction:column;}
 .topbar{display:flex;align-items:center;gap:14px;padding:16px 28px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:5;}
 .hamburger{display:none;border:none;background:none;padding:4px;color:var(--ink);}
@@ -103,7 +127,7 @@ a{color:var(--primary);}
 .topbar-group{display:flex;align-items:center;gap:8px;}
 .topbar-divider{width:1px;height:22px;background:var(--line);flex-shrink:0;}
 .wh-select{border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);border-radius:var(--radius-sm);padding:7px 10px;font-size:12.5px;font-family:var(--font-ui);}
-.sync-pill{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-faint);padding:6px 10px;border:1px solid var(--line);border-radius:20px;}
+.sync-pill{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:11.5px;color:var(--ink-faint);padding:6px 10px;border:1px solid var(--line);border-radius:20px;}
 .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--success);}
 .bell-btn{position:relative;font-size:15px;padding:7px 10px;}
 .notif-badge{position:absolute;top:1px;right:1px;background:var(--danger);color:#fff;font-size:9.5px;font-weight:800;border-radius:50%;min-width:15px;height:15px;display:flex;align-items:center;justify-content:center;padding:0 2px;line-height:1;}
@@ -174,7 +198,7 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .badge.forsorting{background:var(--warning-bg);color:var(--warning);} .badge.delivered{background:var(--success-bg);color:var(--success);}
 .badge.late{background:var(--danger-bg);color:var(--danger);} .badge.pending{background:var(--surface-alt);color:var(--ink-soft);border:1px solid var(--line);}
 .badge.intransit{background:var(--primary-tint);color:var(--primary-ink);} .badge.completed{background:var(--success-bg);color:var(--success);}
-.badge.fast{background:var(--success-bg);color:var(--success);} .badge.low{background:var(--warning-bg);color:var(--warning);} .badge.non{background:var(--danger-bg);color:var(--danger);}
+.badge.fast{background:var(--success-bg);color:var(--success);} .badge.low{background:var(--warning-bg);color:var(--warning);} .badge.non{background:var(--surface-alt);color:var(--ink-soft);border:1px solid var(--line);}
 .qty-strong{font-family:var(--font-display);font-weight:700;font-size:14px;}
 .empty-state{padding:40px 20px;text-align:center;color:var(--ink-faint);font-size:12.8px;}
 .result-note{padding:8px 16px;font-size:11.5px;color:var(--ink-faint);}
@@ -200,6 +224,23 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .pbar{height:6px;border-radius:6px;background:var(--surface-alt);overflow:hidden;border:1px solid var(--line);} .pbar > div{height:100%;background:var(--primary);}
 .status-select{border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);border-radius:var(--radius-sm);padding:4px 6px;font-size:11.5px;}
 body.region-user .admin-only{display:none !important;}
+.btn svg, .sm-item svg{flex-shrink:0;}
+.btn{gap:6px;}
+.inv-table td{vertical-align:middle;}
+.inv-table .cell-sub[title]{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#invViewSeg button{display:inline-flex;align-items:center;gap:5px;}
+.howto{margin-bottom:14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);}
+.howto > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:12.5px;font-weight:600;color:var(--ink-soft);user-select:none;}
+.howto > summary::-webkit-details-marker{display:none;}
+.howto > summary:hover{color:var(--primary-ink);}
+.howto > summary .howto-chev{margin-left:auto;display:inline-flex;transition:transform .15s;}
+.howto[open] > summary .howto-chev{transform:rotate(180deg);}
+.howto[open] > summary{border-bottom:1px solid var(--line);}
+.howto > .notice{margin:0;border:none;border-radius:0 0 var(--radius) var(--radius);}
+#btnOnePager{flex-shrink:0;white-space:nowrap;}
+body.mobile-app #btnOnePager .op-label{display:none;}
+@media (max-width:1320px){ #btnOnePager .op-label{display:none;} #btnOnePager{padding:7px 9px;} }
+body.mobile-app #btnOnePager{padding:7px 9px;}
 .dash-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;}
 .xl-pair{display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;}
 .kpi-click{cursor:pointer;transition:transform .12s, box-shadow .12s;}
@@ -355,7 +396,7 @@ body.mobile-app .sidebar.open, body.mobile-app .sheet.open{transform:translateY(
 .sheet-handle{width:40px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px;flex-shrink:0;}
 body.mobile-app .sidebar::before{content:'';display:block;width:40px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px;flex-shrink:0;}
 body.mobile-app .sidebar .brand{flex-direction:row;text-align:left;padding:2px 4px 12px;gap:12px;}
-body.mobile-app .sidebar .brand-mark{width:56px;}
+body.mobile-app .sidebar .brand-mark{width:40px;}
 body.mobile-app .session-pill{margin:0 0 12px;}
 body.mobile-app #nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 body.mobile-app #nav .nav-label{grid-column:1/-1;margin:8px 2px 0;}
@@ -497,18 +538,31 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
     <div class="session-pill" id="sessionPill"></div>
     <nav id="nav"></nav>
     <div class="sidebar-footer">
-      <button class="mini-btn" id="exportAnalyticsBtn" style="background:var(--primary-tint);color:var(--primary-ink);border-color:transparent;font-weight:600;">📊 Download Analytics Report (Excel)</button>
-      <button class="mini-btn" id="exportAnalyticsPdfBtn" style="background:var(--primary-tint);color:var(--primary-ink);border-color:transparent;font-weight:600;">📄 Download Analytics Report (PDF)</button>
-      <button class="mini-btn" id="changeAdminPwBtn" style="display:none;">🔒 Change Admin Password</button>
-      <button class="mini-btn" id="changeRegionPwBtn" style="display:none;">🔒 Change My Password</button>
-      <button class="mini-btn" id="regionAccountsBtn" style="display:none;">👥 Region Accounts</button>
-      <button class="mini-btn" id="alertSettingsBtn" style="display:none;">🔔 Alert Settings</button>
-      <button class="mini-btn" id="resetDataBtn" style="display:none;">🧹 Reset test data</button>
-      <button class="mini-btn" id="exportDataBtn">Export raw data (JSON)</button>
-      <button class="mini-btn" id="installAppBtn" style="display:none;background:var(--primary);color:#fff;border-color:transparent;font-weight:700;">📲 Install App on this phone</button>
-      <button class="mini-btn" id="logoutBtn" style="color:var(--danger);">Log out</button>
-      <div id="appVersionInfo" style="font-size:10.5px;color:var(--ink-faint);text-align:center;margin-top:8px;"></div>
-      <div class="cell-sub" id="appVersionLabel" style="text-align:center;margin-top:6px;">App version 3</div>
+      <button class="mini-btn" id="installAppBtn" data-ico="phone" style="display:none;background:var(--primary);color:#fff;border-color:transparent;font-weight:700;">Install App on this phone</button>
+      <div class="settings-wrap">
+        <div class="settings-menu" id="settingsMenu" hidden>
+          <div class="sm-group"><div class="sm-label">Reports</div>
+            <button class="sm-item" id="exportAnalyticsBtn" data-ico="chart">Analytics Report (Excel)</button>
+            <button class="sm-item" id="exportAnalyticsPdfBtn" data-ico="file">Analytics Report (PDF)</button>
+          </div>
+          <div class="sm-group"><div class="sm-label">My account</div>
+            <button class="sm-item" id="changeAdminPwBtn" data-ico="lock" style="display:none;">Change Admin Password</button>
+            <button class="sm-item" id="changeRegionPwBtn" data-ico="lock" style="display:none;">Change My Password</button>
+          </div>
+          <div class="sm-group"><div class="sm-label">Admin</div>
+            <button class="sm-item" id="regionAccountsBtn" data-ico="users" style="display:none;">Region Accounts</button>
+            <button class="sm-item" id="requestKeyBtn" data-ico="key" style="display:none;">Request Form Key</button>
+            <button class="sm-item" id="alertSettingsBtn" data-ico="bell" style="display:none;">Alert Settings</button>
+          </div>
+          <div class="sm-group sm-advanced"><div class="sm-label">Advanced</div>
+            <button class="sm-item" id="exportDataBtn" data-ico="download">Export raw data (JSON)</button>
+            <button class="sm-item sm-danger" id="resetDataBtn" data-ico="reset" style="display:none;">Reset test data</button>
+          </div>
+          <div id="appVersionInfo" class="sm-version"></div>
+        </div>
+        <button class="settings-toggle" id="settingsToggle" aria-expanded="false" aria-controls="settingsMenu"><span data-ico="settings"></span><span class="st-label">Settings &amp; Reports</span><span class="st-chev" data-ico="chevron" data-ico-size="14"></span></button>
+      </div>
+      <button class="mini-btn logout-btn" id="logoutBtn" data-ico="logout" data-ico-size="14">Log out</button>
     </div>
   </aside>
   <div class="main">
@@ -516,6 +570,7 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
       <button class="hamburger" id="hamburgerBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" stroke-linecap="round"/></svg></button>
       <div><h2 id="pageTitle">Dashboard</h2><div class="topbar-sub" id="pageSub">Overview of the full POSM inventory</div></div>
       <div class="topbar-right">
+        <button class="btn primary sm" id="btnOnePager" title="Download a one-page PDF summary of this dashboard" style="display:none;"><span data-ico="file" data-ico-size="14"></span><span class="op-label">One-Page Report</span></button>
         <div class="topbar-group" id="filterGroup">
           <select class="wh-select" id="globalRegionFilter"></select>
           <select class="wh-select" id="globalBUFilter"></select>
@@ -524,9 +579,9 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
         <div class="topbar-divider"></div>
         <button class="icon-btn m-only" id="mFilterBtn" aria-label="Filters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg><span class="dot"></span></button>
         <div class="topbar-group" id="statusGroup">
-          <button class="btn sm bell-btn" id="notifBell" title="Notifications">🔔<span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
+          <button class="btn sm bell-btn" id="notifBell" title="Notifications" aria-label="Notifications"><span data-ico="bell" data-ico-size="16"></span><span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
           <div class="sync-pill" id="syncPill"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Connecting...</span></div>
-          <button class="btn sm" id="refreshNowBtn" title="Refresh now">↻</button>
+          <button class="btn sm" id="refreshNowBtn" title="Refresh now" aria-label="Refresh now"><span data-ico="refresh" data-ico-size="16"></span></button>
         </div>
       </div>
     </div>
@@ -588,8 +643,38 @@ const ICONS = {
   more:'<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>',
   pin:'<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.3" fill="none" stroke="currentColor" stroke-width="1.7"/>',
   barcode:'<path d="M4 5v14M7 5v14M9.5 5v14M13 5v14M15 5v14M18 5v14M20 5v14" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 5v14M16.3 5v14" fill="none" stroke="currentColor" stroke-width="0.8"/>',
+  download:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 3v5h5M9 13h6M9 17h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  users:'<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 20c.6-3.4 3-5.2 6-5.2s5.4 1.8 6 5.2M16 4.8a3.2 3.2 0 0 1 0 6.3M18 14.9c1.6.6 2.7 2.3 3 5.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  key:'<circle cx="8" cy="15" r="4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  bell:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  settings:'<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  reset:'<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  phone:'<rect x="7" y="2.5" width="10" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 18.5h2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  refresh:'<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  logout:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l4-4-4-4M14 12H4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  printer:'<path d="M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 14h10v7H7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  upload:'<path d="M12 20V9M7 14l5-5 5 5M5 4h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  target:'<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+  store:'<path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  trend:'<path d="M3 17l6-6 4 4 8-8M15 7h6v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7" cy="17.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="17.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  info:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 11v6M12 7.5h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  chevron:'<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  grid:'<rect x="4" y="4" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="13" y="4" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="13" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   qr:'<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.5 6.5h1v1h-1zM16.5 6.5h1v1h-1zM6.5 16.5h1v1h-1zM14 14h2v2h-2zM18 14h2v2h-2zM16 16h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" fill="currentColor"/>',
 };
+function fillStaticIcons(root){
+  (root||document).querySelectorAll('[data-ico]').forEach(el=>{
+    if(el.dataset.icoDone) return; el.dataset.icoDone = '1';
+    el.insertAdjacentHTML('afterbegin', icon(el.dataset.ico, Number(el.dataset.icoSize)||15));
+  });
+}
 function icon(name,size=17){return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor">${ICONS[name]||''}</svg>`;}
 
 /* ============================= REAL SEED DATA ============================= */
@@ -669,6 +754,7 @@ function scopeData(d){
     posmMaster: (d.posmMaster||[]).filter(p=>okCode(p.code)),
     inventory: (d.inventory||[]).filter(r=>okWh(r.warehouseId) && okCode(r.posmCode)),
     transactions: (d.transactions||[]).filter(t=>okWh(t.warehouseId) && okCode(t.posmCode)),
+    ioSummary: Array.isArray(d.ioSummary) ? d.ioSummary.filter(r=>okWh(r.w) && okCode(r.c)) : d.ioSummary,
     requests: (d.requests||[]).filter(r=>okWh(r.warehouseId) && okCode(r.posmCode)),
     transfers: (d.transfers||[]).filter(t=>(okWh(t.fromWarehouseId) || okWh(t.toWarehouseId)) && okCode(t.posmCode)),
     pendingActions: isRegionUser() ? (d.pendingActions||[]).filter(p=>p.submittedBy===session.name) : (d.pendingActions||[]),
@@ -761,6 +847,34 @@ function monthKey(dateStr){ const d=new Date(dateStr); return `${d.getFullYear()
 function uid(prefix){ return prefix+'-'+Math.random().toString(36).slice(2,8); }
 function slugId(str){ return String(str).replace(/[^A-Za-z0-9_\-.~:@+]/g,'_'); }
 const imageCache = {};
+/* ---- Security: text typed by users (store names, reasons, remarks, etc.) is shown inside the
+   page's HTML. To stop anyone from sneaking in code through those fields, the characters that
+   can break out of HTML (< > ") are swapped for harmless look-alikes when data arrives. Normal
+   text without those characters is untouched. ---- */
+const SAFE_SKIP_KEYS = new Set(['id','code','posmCode','warehouseId','fromWarehouseId','toWarehouseId','tsId','status','receiptImage','newPosmImage','image','image1','image2']);
+function neutralizeText(v){ return (typeof v==='string' && /[<>"]/.test(v)) ? v.replace(/</g,'‹').replace(/>/g,'›').replace(/"/g,'″') : v; }
+function neutralizeDeep(v, key){
+  if(typeof v==='string') return SAFE_SKIP_KEYS.has(key) ? v : neutralizeText(v);
+  if(Array.isArray(v)) return v.map(x=>neutralizeDeep(x, key));
+  if(v && typeof v==='object'){ const o = {}; Object.keys(v).forEach(k=>{ o[k] = neutralizeDeep(v[k], k); }); return o; }
+  return v;
+}
+function sanitizeServerData(d){
+  if(!d || typeof d!=='object') return d;
+  const out = neutralizeDeep(d, '');
+  // Pending payloads are JSON text: clean the values inside, keep it valid JSON.
+  (out.pendingActions||[]).forEach((pa,i)=>{
+    try{ pa.payload = JSON.stringify(neutralizeDeep(JSON.parse(d.pendingActions[i].payload || '{}'), '')); }catch(e){ pa.payload = '{}'; }
+  });
+  return out;
+}
+// Only real images may be used as <img src>.
+function safeImgSrc(src){
+  src = String(src||'');
+  if(/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/i.test(src)) return src;
+  if(/^https:\/\/[^\s"'<>]+$/i.test(src)) return src;
+  return '';
+}
 function cssEscape(s){ return String(s).replace(/["\\]/g,'\\$&'); }
 async function loadImagesFor(codes){
   const uncached = [...new Set(codes)].filter(c=>c && !(c in imageCache)).slice(0,60);
@@ -769,6 +883,7 @@ async function loadImagesFor(codes){
     const res = await fetch(APPS_SCRIPT_URL+'?action=getImages&codes='+encodeURIComponent(uncached.join(','))+'&t='+Date.now(), {redirect:'follow'});
     const data = await res.json();
     Object.entries(data.results||{}).forEach(([code,src])=>{
+      src = safeImgSrc(src); if(!src) return;
       imageCache[code] = src;
       document.querySelectorAll(`[data-tile-code="${cssEscape(code)}"]`).forEach(el=>{
         const size = el.dataset.tileSize || 38;
@@ -823,7 +938,6 @@ function buildInitialData(){
 
 let DATA = null;
 let USE_DB = false; // true once connected to the Google Sheets backend
-let unsubscribers = [];
 let renderScheduled = false;
 let autoRefreshTimer = null;
 
@@ -862,7 +976,7 @@ function setSyncStatus(state, done, total){
   const map = {
     connecting: ['var(--warning)', 'Connecting...'],
     seeding: ['var(--warning)', `Seeding Google Sheet... ${done||0}/${total||0}`],
-    live: ['var(--success)', 'Connected • Google Sheets'],
+    live: ['var(--success)', 'Live • Synced'],
     refreshing: ['var(--warning)', 'Refreshing...'],
     cached: ['var(--warning)', 'Showing saved data • updating...'],
     local: ['var(--ink-faint)', 'Local only (this device)'],
@@ -879,6 +993,11 @@ function setSyncStatus(state, done, total){
    latest changes" without needing any device-to-device sync step. */
 let APPS_SCRIPT_URL = null;
 
+// Login details sent with every read request (Admin password or region account).
+function readCreds(){
+  if(!session) return {};
+  return session.role==='admin' ? {adminPassword: session.password} : {region: session.region, regionPassword: session.password};
+}
 async function postAction(action, payload){
   const body = Object.assign({action}, payload);
   const res = await fetch(APPS_SCRIPT_URL, {
@@ -913,21 +1032,23 @@ function loadDataCache(){
 let ALERTS = null; // cached alert snapshot: pending approvals, overdue/due-soon deliveries, low-stock reorder items
 async function loadFromServer(silent){
   if(!silent) setSyncStatus('refreshing');
-  const res = await fetch(APPS_SCRIPT_URL + '?action=getData&t=' + Date.now(), {redirect:'follow'});
-  const data = await res.json();
-  if(data.error) throw new Error(data.error);
-  DATA_ALL = data;
-  saveDataCache(data);
+  // Data is only given to a logged-in account (Admin password or region login).
+  const data = await postAction('getData', readCreds());
+  delete data.success;
+  lastRefreshAt = Date.now();
+  if(Array.isArray(data.ioSummary)) data.ioSummary = data.ioSummary.map(expandIoRow);
+  DATA_ALL = sanitizeServerData(data);
+  saveDataCache(DATA_ALL);
   applyRegionScope();
-  DATA = scopeData(data);
+  DATA = scopeData(DATA_ALL);
   syncOrgListsFromData();
   renderDatalists();
   if(!silent) setSyncStatus('live');
   // Alerts are fetched alongside the main data (not on every action) so this
   // never adds latency to a save — only to the initial load and the 45s
   // auto-refresh cycle. A failure here shouldn't block the rest of the app.
-  fetch(APPS_SCRIPT_URL + '?action=getAlerts' + (isRegionUser() ? '&region='+encodeURIComponent(session.region) : '') + '&t=' + Date.now(), {redirect:'follow'})
-    .then(r=>r.json()).then(a=>{ if(!a.error){ ALERTS = a; saveDataCache(DATA_ALL); if(currentSection==='dashboard') renderDashboard(); } })
+  postAction('getAlerts', readCreds())
+    .then(a=>{ delete a.success; ALERTS = a; saveDataCache(DATA_ALL); if(currentSection==='dashboard') renderDashboard(); })
     .catch(()=>{});
   scheduleRender();
 }
@@ -1003,6 +1124,28 @@ function wireLoginScreen(){
     }
   });
 }
+/* ---- Settings & Reports menu ---- */
+function refreshSettingsMenu(){
+  document.querySelectorAll('#settingsMenu .sm-group').forEach(g=>{
+    const anyVisible = [...g.querySelectorAll('.sm-item')].some(b=>b.style.display!=='none');
+    g.style.display = anyVisible ? '' : 'none';
+  });
+}
+function setSettingsMenu(open){
+  const menu = document.getElementById('settingsMenu'), tog = document.getElementById('settingsToggle');
+  if(!menu || !tog) return;
+  if(open) refreshSettingsMenu();
+  menu.hidden = !open; tog.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+document.getElementById('settingsToggle').addEventListener('click', e=>{ e.stopPropagation(); setSettingsMenu(document.getElementById('settingsMenu').hidden); });
+document.getElementById('settingsMenu').addEventListener('click', e=>{ if(e.target.closest('.sm-item')) setTimeout(()=>setSettingsMenu(false), 0); });
+document.addEventListener('click', e=>{ const w = document.querySelector('.settings-wrap'); if(w && !w.contains(e.target)) setSettingsMenu(false); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') setSettingsMenu(false); });
+fillStaticIcons();
+document.getElementById('btnOnePager').addEventListener('click', ()=>{
+  if(currentSection!=='dashboard') return;
+  try{ buildOnePageReport(); }catch(e){ console.error(e); alert('Could not build the report: '+(e.message||e)); }
+});
 document.getElementById('logoutBtn') && document.getElementById('logoutBtn').addEventListener('click', ()=>{
   clearSession(); location.reload();
 });
@@ -1068,7 +1211,7 @@ document.getElementById('regionAccountsBtn') && document.getElementById('regionA
   trig.disabled = false; trig.textContent = orig;
   const emails = cur.regionEmails || {};
   openModal('Region Accounts', `
-    <p class="login-note" style="margin-top:0;">Each region logs in with its own username and password. New accounts start with the default password <b>${escHtml(cur.defaultPassword||'')}</b> — they can change it from the sidebar (🔒 Change My Password). Region alert emails only receive alerts for their own region.</p>
+    <p class="login-note" style="margin-top:0;">Each region logs in with its own username and password. New accounts start with the default password <b>${escHtml(cur.defaultPassword||'')}</b> — they can change it from Settings &amp; Reports › Change My Password. Region alert emails only receive alerts for their own region.</p>
     ${REGION_ACCOUNTS.map(r=>{
       const whs = ALL_WAREHOUSES.filter(w=>accountCovers(r, w.region)).length;
       return `<div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
@@ -1097,13 +1240,34 @@ document.getElementById('regionAccountsBtn') && document.getElementById('regionA
     catch(e){ alert(e.message||'Could not save.'); btn.disabled = false; btn.textContent = 'Save Emails'; }
   });
 });
+const REQUEST_FORM_URL = 'https://samsung-ce.github.io/RMAS-REQUEST-FORM/';
+document.getElementById('requestKeyBtn') && document.getElementById('requestKeyBtn').addEventListener('click', async ()=>{
+  let cur = '';
+  try{ cur = (await postAction('getRequestFormKey', {adminPassword: session.password})).requestFormKey || ''; }
+  catch(e){ alert(e.message || 'Could not load the key.'); return; }
+  const linkFor = k => k ? REQUEST_FORM_URL + '?key=' + encodeURIComponent(k) : REQUEST_FORM_URL;
+  openModal('Request Form Key', `
+    <p class="login-note" style="margin-top:0;">Stops strangers from sending fake requests. When a key is set, only the Request Form link that carries the key (and logged-in users of this tool) can submit requests. Leave it empty to turn the key off.</p>
+    <div class="notice" style="margin-bottom:12px;">${icon('alert',15)}<div><b>Before turning it on</b>, the Request Form tool must be updated to send the key — otherwise it will stop working.</div></div>
+    <div class="field"><label>Access key (6-40 letters / numbers)</label><div style="display:flex;gap:8px;"><input type="text" id="rkInput" value="${escHtml(cur)}" placeholder="e.g. rmas-7Kq2x9"><button class="btn" id="rkGen" type="button">Generate</button></div></div>
+    <div class="field"><label>Link to share with Trade Supervisors / stores</label><input type="text" id="rkLink" readonly value="${escHtml(linkFor(cur))}" onclick="this.select()"></div>
+  `, `<button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" id="rkSave">Save</button>`);
+  const inp = document.getElementById('rkInput'), link = document.getElementById('rkLink');
+  inp.addEventListener('input', ()=>{ link.value = linkFor(inp.value.trim()); });
+  document.getElementById('rkGen').addEventListener('click', ()=>{ const a = new Uint8Array(6); crypto.getRandomValues(a); inp.value = 'rmas-' + Array.from(a, b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join(''); link.value = linkFor(inp.value); });
+  document.getElementById('rkSave').addEventListener('click', async ()=>{
+    const btn = document.getElementById('rkSave'); btn.disabled = true; btn.textContent = 'Saving...';
+    try{ const r = await postAction('saveRequestFormKey', {adminPassword: session.password, requestFormKey: inp.value.trim()}); alert(r.requestFormKey ? 'Key saved. Share the new link.' : 'Key turned off.'); closeModal(); }
+    catch(e){ alert(e.message || 'Could not save.'); btn.disabled = false; btn.textContent = 'Save'; }
+  });
+});
 document.getElementById('alertSettingsBtn') && document.getElementById('alertSettingsBtn').addEventListener('click', async ()=>{
   const btnTrigger = document.getElementById('alertSettingsBtn');
   const origLabel = btnTrigger.textContent;
   btnTrigger.disabled = true; btnTrigger.textContent = 'Loading...';
   let current = {alertEmails:'', telegramBotToken:'', telegramChatId:'', viberAuthToken:'', viberUserId:'', lowStockThreshold:15};
   try{
-    current = await fetch(APPS_SCRIPT_URL+'?action=getAlertSettings&t='+Date.now(), {redirect:'follow'}).then(r=>r.json());
+    current = await postAction('getAlertSettings', {adminPassword: session.password});
   }catch(e){}
   btnTrigger.disabled = false; btnTrigger.textContent = origLabel;
   openModal('Alert Settings', `
@@ -1154,12 +1318,14 @@ document.getElementById('alertSettingsBtn') && document.getElementById('alertSet
       });
       const res = await postAction('testSendAlert', {adminPassword: session.password});
       const lines = [];
-      lines.push(res.email ? '✅ Email sent' : (res.emailError ? '❌ Email failed: '+res.emailError : '— Email not configured'));
-      lines.push(res.telegram ? '✅ Telegram sent' : (res.telegramError ? '❌ Telegram failed' : '— Telegram not configured'));
-      lines.push(res.viber ? '✅ Viber sent' : (res.viberError ? '❌ Viber failed' : '— Viber not configured'));
+      const ok = t => `<span style="color:var(--success);display:inline-flex;align-items:center;gap:4px;">${icon('check',13)} ${t}</span>`;
+      const bad = t => `<span style="color:var(--danger);display:inline-flex;align-items:center;gap:4px;">${icon('alert',13)} ${escHtml(t)}</span>`;
+      lines.push(res.email ? ok('Email sent') : (res.emailError ? bad('Email failed: '+res.emailError) : '— Email not configured'));
+      lines.push(res.telegram ? ok('Telegram sent') : (res.telegramError ? bad('Telegram failed') : '— Telegram not configured'));
+      lines.push(res.viber ? ok('Viber sent') : (res.viberError ? bad('Viber failed') : '— Viber not configured'));
       const rr = res.regions || {};
       if(Object.keys(rr).length) lines.push('Region emails: ' + Object.keys(rr).map(k=>k+' — '+rr[k]).join(' · '));
-      else lines.push('— No region emails set (👥 Region Accounts)');
+      else lines.push('— No region emails set (Settings & Reports › Region Accounts)');
       document.getElementById('asTestResult').innerHTML = `<div class="notice">${icon('check',15)}<div>Settings saved. ${lines.join('<br>')}</div></div>`;
     }catch(e){
       document.getElementById('asTestResult').innerHTML = `<div class="notice" style="background:var(--danger-bg);color:var(--danger);">${icon('alert',15)}<div>${e.message||'Test send failed.'}</div></div>`;
@@ -1214,6 +1380,8 @@ async function proceedAfterLogin(){
   if(crpBtn) crpBtn.style.display = isRegionUser() ? '' : 'none';
   const raBtn = document.getElementById('regionAccountsBtn');
   if(raBtn) raBtn.style.display = (session.role==='admin') ? '' : 'none';
+  const rkBtn = document.getElementById('requestKeyBtn');
+  if(rkBtn) rkBtn.style.display = (session.role==='admin' && USE_DB) ? '' : 'none';
   if(USE_DB && session.role==='admin' && session.password){
     // Lets the server check that region accounts only touch their own warehouses.
     const warehouseRegions = {}; ALL_WAREHOUSES.forEach(w=>{ warehouseRegions[w.id] = w.region; });
@@ -1232,7 +1400,7 @@ async function proceedAfterLogin(){
   // Let the rest of the page script finish loading first (render helpers are defined further down).
   await new Promise(r=>setTimeout(r,0));
   if(cached && cached.data && !DATA_ALL){
-    DATA_ALL = cached.data;
+    DATA_ALL = sanitizeServerData(cached.data);
     if(cached.alerts && cached.alertsFor===alertsOwner()) ALERTS = cached.alerts;
     rebuildView();
     setSyncStatus('cached');
@@ -1399,8 +1567,13 @@ function startAutoRefresh(){
   if(autoRefreshTimer) clearInterval(autoRefreshTimer);
   // Bonus: quietly re-pull every 45s so open tabs pick up other devices' changes
   // even without an explicit refresh. A manual refresh always works too.
-  autoRefreshTimer = setInterval(()=>{ loadFromServer(true).catch(()=>{}); }, 45000);
+  autoRefreshTimer = setInterval(()=>{ if(!document.hidden) loadFromServer(true).catch(()=>{}); }, 45000);
 }
+let lastRefreshAt = 0;
+// Coming back to the tab/app after a while: refresh right away instead of waiting.
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && USE_DB && session && DATA_ALL && Date.now()-lastRefreshAt > 45000) loadFromServer(true).catch(()=>{});
+});
 
 /* ---- Generic action performer: applies directly if Admin, else routes
    through the pending-approval queue if a regular User ---- */
@@ -1417,8 +1590,8 @@ async function performAction(targetAction, payload, opts){
     if(!opts.silent){
       const patched = applyLocalUpdate(targetAction, withAttribution, result);
       if(patched) renderAll(); else await loadFromServer(true);
-      // When a filter is on, the screen works on a filtered copy — pull a fresh full copy in the background.
-      if(patched && DATA_ALL && DATA!==DATA_ALL) loadFromServer(true).catch(()=>{});
+      // Pull a fresh copy in the background so server-side totals (and filtered views) catch up.
+      if(patched) loadFromServer(true).catch(()=>{});
     }
     return {applied:true};
   } else {
@@ -1446,8 +1619,6 @@ function scheduleRender(){
   requestAnimationFrame(()=>{ renderScheduled = false; renderAll(); });
 }
 
-/* dbSetPosm/dbUpdatePosm/dbAdjustInventory/dbUploadImage removed — mutations now
-   go through performAction()/postAction() directly (see below). */
 
 /* ============================= DERIVED HELPERS ============================= */
 function posmByCode(code){ return DATA.posmMaster.find(p=>p.code===code); }
@@ -1539,7 +1710,20 @@ function renderActivityFeed(){
 function getOverdueRequests(){
   return DATA.requests.filter(r=> r.status==='for_delivery' && r.dueDate && new Date(r.dueDate) < new Date());
 }
-function invRow(whId,code){ return DATA.inventory.find(r=>r.warehouseId===whId && r.posmCode===code); }
+// Fast lookups: an index of the inventory rows, rebuilt only when the inventory list changes
+// (instead of scanning all ~6,000 rows for every POSM on every screen).
+let _invIdxSrc = null, _invIdxLen = -1, _invByKey = new Map(), _invByCode = new Map();
+function invIndex(){
+  const inv = DATA.inventory;
+  if(inv === _invIdxSrc && inv.length === _invIdxLen) return;
+  _invByKey = new Map(); _invByCode = new Map();
+  inv.forEach(r=>{
+    _invByKey.set(r.warehouseId + '\u0001' + r.posmCode, r);
+    let list = _invByCode.get(r.posmCode); if(!list){ list = []; _invByCode.set(r.posmCode, list); } list.push(r);
+  });
+  _invIdxSrc = inv; _invIdxLen = inv.length;
+}
+function invRow(whId,code){ invIndex(); return _invByKey.get(whId + '\u0001' + code); }
 function currentFilterWarehouse(){ return document.getElementById('globalWarehouseFilter').value; }
 function currentFilterBU(){ const el = document.getElementById('globalBUFilter'); return el ? el.value : 'all'; }
 function matchesBUFilter(code){
@@ -1549,10 +1733,12 @@ function matchesBUFilter(code){
   return p && p.bu===buF;
 }
 function totalQtyForPosm(code, whId){
-  return DATA.inventory.filter(r=>r.posmCode===code && (!whId||whId==='all'||r.warehouseId===whId)).reduce((s,r)=>s+r.qty,0);
+  invIndex(); const rows = _invByCode.get(code) || [];
+  let t = 0; for(const r of rows) if(!whId || whId==='all' || r.warehouseId===whId) t += r.qty; return t;
 }
 function totalBeginningForPosm(code, whId){
-  return DATA.inventory.filter(r=>r.posmCode===code && (!whId||whId==='all'||r.warehouseId===whId)).reduce((s,r)=>s+r.beginningStock,0);
+  invIndex(); const rows = _invByCode.get(code) || [];
+  let t = 0; for(const r of rows) if(!whId || whId==='all' || r.warehouseId===whId) t += r.beginningStock; return t;
 }
 function findStoreEntry(storeName){ return storeRowsArray().find(s=>s.store===storeName); }
 
@@ -1602,7 +1788,7 @@ function renderNav(){
     if(s.key==='mysubs' && mySubsOpenCount) badge = `<span class="nav-badge">${mySubsOpenCount}</span>`;
     if(s.key==='rejected' && rejectedCount) badge = `<span class="nav-badge">${rejectedCount}</span>`;
     let label = '';
-    if(s.group && s.group!==lastGroup) label = `<div class="nav-label">${s.group}</div>`;
+    if(s.group && s.group!==lastGroup) label = `<div class="nav-label">${(isRegionUser() && s.group==='Admin') ? 'Directory' : s.group}</div>`;
     lastGroup = s.group||lastGroup;
     return label + `<button class="nav-item ${s.key===currentSection?'active':''}" data-nav="${s.key}">${icon(s.icon)}<span>${s.label}</span>${badge}</button>`;
   }).join('');
@@ -1769,7 +1955,8 @@ function resizeImageFile(file, maxWidth, maxChars){
   });
 }
 function openReceiptLightbox(dataUrl, label){
-  openModal(label || 'Delivery Receipt', `<img src="${dataUrl}" style="width:100%;border-radius:8px;display:block;">`,
+  dataUrl = safeImgSrc(dataUrl); if(!dataUrl){ alert('This receipt image cannot be shown.'); return; }
+  openModal(escHtml(label || 'Delivery Receipt'), `<img src="${dataUrl}" style="width:100%;border-radius:8px;display:block;">`,
     `<button class="btn ghost" onclick="closeModal()">Close</button>`);
 }
 
@@ -1970,7 +2157,7 @@ function openNewRequestModal(){
       // straight in "For Sorting" for everyone to see.
       const reqId = uid('REQ');
       try{
-        await postAction('newRequest', Object.assign({id:reqId}, data));
+        await postAction('newRequest', Object.assign({id:reqId}, data, readCreds()));
         closeModal();
         applyLocalUpdate('newRequest', Object.assign({id:reqId}, data));
         renderAll();
@@ -2086,7 +2273,7 @@ function renderAlertPanel(){
   return `
     <div class="panel" style="margin-bottom:16px;">
       <div class="panel-head"><div><h3>${icon('alert',16)} Alerts</h3><div class="panel-sub">Needs your attention</div></div>
-        <button class="btn sm" id="btnExportAlerts">⬇ Excel</button></div>
+        <button class="btn sm" id="btnExportAlerts">${icon('download',13)} Excel</button></div>
       <div>
         ${items.map(i=>`<button class="alert-row" data-alert-nav="${i.nav}"><div class="alert-dot" style="background:var(--${i.color}-bg);color:var(--${i.color});">${icon(i.icon,14)}</div><span style="font-size:13px;color:var(--ink);">${i.label}</span></button>`).join('')}
       </div>
@@ -2107,13 +2294,12 @@ function renderDashboard(){
   const deltaVsBeginning = totalBeginning ? ((totalStock-totalBeginning)/totalBeginning*100) : 0;
 
   const html = `
-    <div class="dash-toolbar"><button class="btn primary sm" id="btnOnePager">📄 One-Page Report (PDF)</button></div>
     ${renderAlertPanel()}
     <div class="kpi-grid">
       <div class="kpi-card kpi-click" data-kpi-go="stock" title="Open inventory"><div class="kpi-top"><span class="kpi-label">Total POSM Stock</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('inventory',16)}</div></div>
         <div class="kpi-value">${totalStock.toLocaleString()}</div><div class="kpi-delta ${deltaVsBeginning>=0?'up':'down'}">${deltaVsBeginning>=0?'+':''}${deltaVsBeginning.toFixed(1)}% vs beginning stock</div></div>
       <div class="kpi-card kpi-click" data-kpi-go="disposal" title="Open items for disposal"><div class="kpi-top"><span class="kpi-label">For Disposal</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('trash',16)}</div></div>
-        <div class="kpi-value">${disposeQty.toLocaleString()}</div><div class="kpi-delta down">${disposeItems.length} POSM type/s marked expired/obsolete</div></div>
+        <div class="kpi-value">${disposeQty.toLocaleString()}</div><div class="kpi-delta ${disposeItems.length?'down':'flat'}">${disposeItems.length} POSM type/s marked expired/obsolete</div></div>
       <div class="kpi-card kpi-click" data-kpi-go="pendingreq" title="Open requests"><div class="kpi-top"><span class="kpi-label">Pending Requests</span><div class="kpi-icon" style="background:var(--warning-bg);color:var(--warning)">${icon('requests',16)}</div></div>
         <div class="kpi-value">${pendingReq.length}</div><div class="kpi-delta flat">For Sorting + For Delivery</div></div>
       <div class="kpi-card kpi-click" data-kpi-go="delivered" title="Open delivery metrics"><div class="kpi-top"><span class="kpi-label">Delivered (7 days)</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('check',16)}</div></div>
@@ -2138,18 +2324,15 @@ function renderDashboard(){
       <div class="panel-head"><div><h3>Recent Activity</h3><div class="panel-sub">All transaction history — stock in/out, requests, transfers, and org changes</div></div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div class="seg" id="activityFilterSeg">${[['all','All'],['stock','Stock In/Out'],['requests','Requests'],['transfers','Transfers'],['org','Org Changes']].map(([k,l])=>`<button data-actfilter="${k}" class="${dashboardActivityFilter===k?'active':''}">${l}</button>`).join('')}</div>
-          <button class="btn sm" id="btnExportActivity">⬇ Excel</button>
+          <button class="btn sm" id="btnExportActivity">${icon('download',13)} Excel</button>
         </div>
       </div>
       <div id="activityFeedRoot"></div>
     </div>
-    <div class="notice" style="margin-top:16px;">${icon('check',16)}<div><b>Real POSM master data</b> from the Import Center (${DATA.posmMaster.length} POSM types, ${WAREHOUSES.length} warehouses). The beginning stock here is the current POSM count from when the data was loaded — In/Out, Requests, and Transfers tracking starts from that point.</div></div>
+    <details class="howto"><summary>${icon('info',15)} About this data<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice" style="margin-top:16px;">${icon('check',16)}<div><b>Real POSM master data</b> from the Import Center (${DATA.posmMaster.length} POSM types, ${WAREHOUSES.length} warehouses). The beginning stock here is the current POSM count from when the data was loaded — In/Out, Requests, and Transfers tracking starts from that point.</div></div></details>
   `;
   document.getElementById('content').innerHTML = html;
   renderActivityFeed();
-  document.getElementById('btnOnePager').addEventListener('click', ()=>{
-    try{ buildOnePageReport(); }catch(e){ console.error(e); alert('Could not build the report: '+(e.message||e)); }
-  });
   document.querySelectorAll('[data-actfilter]').forEach(b=>b.addEventListener('click', ()=>{
     dashboardActivityFilter = b.dataset.actfilter;
     document.querySelectorAll('[data-actfilter]').forEach(x=>x.classList.toggle('active', x.dataset.actfilter===dashboardActivityFilter));
@@ -2158,8 +2341,8 @@ function renderDashboard(){
   document.querySelectorAll('[data-nav-to]').forEach(b=>b.addEventListener('click',()=>{currentSection=b.dataset.navTo; renderAll();}));
   document.querySelectorAll('[data-kpi-go]').forEach(card=>card.addEventListener('click',()=>{
     const go = card.dataset.kpiGo;
-    if(go==='stock'){ invFilters.status='all'; invScope='mine'; currentSection='inventory'; }
-    else if(go==='disposal'){ invFilters.status='disposal'; invScope='mine'; currentSection='inventory'; }
+    if(go==='stock'){ invFilters.status='all'; invScope='mine'; invLimit=INV_PAGE; currentSection='inventory'; }
+    else if(go==='disposal'){ invFilters.status='disposal'; invScope='mine'; invLimit=INV_PAGE; currentSection='inventory'; }
     else if(go==='pendingreq'){ currentSection='requests'; }
     else if(go==='delivered'){ currentSection='metrics'; }
     renderAll(); window.scrollTo(0,0);
@@ -2185,16 +2368,18 @@ function renderDashboard(){
 
   destroyCharts(['chartWhStock','chartMoveSplit','chartWeeklyTrend']);
   const c = getChartColors();
+  const whStock = WAREHOUSES.map(w=>({name:w.name, qty:DATA.inventory.filter(r=>r.warehouseId===w.id).reduce((s,r)=>s+r.qty,0)})).sort((a,b)=>b.qty-a.qty);
+  fitBarHeight('chartWhStock', whStock.length);
   charts.chartWhStock = safeChart(document.getElementById('chartWhStock'), {
     type:'bar',
-    data:{ labels: WAREHOUSES.map(w=>w.name), datasets:[{ label:'Current Stock', data: WAREHOUSES.map(w=>DATA.inventory.filter(r=>r.warehouseId===w.id).reduce((s,r)=>s+r.qty,0)),
-      backgroundColor: c.primary, borderRadius:6, maxBarThickness:32 }]},
-    options: baseChartOpts(c, {legend:false})
+    data:{ labels: whStock.map(w=>w.name), datasets:[{ label:'Current Stock', data: whStock.map(w=>w.qty),
+      backgroundColor: c.primary, borderRadius:5, maxBarThickness:22 }]},
+    options: hbarOpts(c, {legend:false})
   });
   const moveCounts = movementCounts(whFilter, buFilter);
   charts.chartMoveSplit = safeChart(document.getElementById('chartMoveSplit'), {
     type:'doughnut',
-    data:{ labels:['Fast Moving','Low Moving','Non-Moving'], datasets:[{data:[moveCounts.fast,moveCounts.low,moveCounts.non], backgroundColor:[c.success,c.warning,c.danger], borderWidth:0}]},
+    data:{ labels:['Fast Moving','Low Moving','Non-Moving'], datasets:[{data:[moveCounts.fast,moveCounts.low,moveCounts.non], backgroundColor:[c.success,c.warning,c.ink3], borderWidth:0}]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:c.ink, boxWidth:10, padding:14, font:{size:11.5}}}} }
   });
   const weekly = weeklyMetrics(8, buFilter);
@@ -2210,7 +2395,38 @@ function renderDashboard(){
 
 /* ============================= RENDER: INVENTORY ============================= */
 let invFilters = {search:'', bu:'all', status:'all'};
-let invScope = 'mine'; // region accounts: 'mine' = own region only, 'all' = every warehouse (view only)
+let invScope = 'mine';
+const INV_PAGE = 60;
+// Cards (big pictures) or List (compact table) — remembered on this device.
+let invView = (()=>{ try{ return localStorage.getItem('rmas_inv_view') || 'cards'; }catch(e){ return 'cards'; } })();
+function whereShort(code){
+  const rows = DATA.inventory.filter(r=>r.posmCode===code && r.qty>0).sort((a,b)=>b.qty-a.qty);
+  if(!rows.length) return '<span class="cell-sub">No stock anywhere</span>';
+  const mine = new Set(ALL_WAREHOUSES.filter(w=>sameRegion(w.region)).map(w=>w.id));
+  const part = rows.slice(0,3).map(r=>{ const w = whById(r.warehouseId); const n = escHtml(w?w.name:r.warehouseId) + ' <b>' + r.qty.toLocaleString() + '</b>'; return mine.has(r.warehouseId) ? `<span style="color:var(--primary-ink);font-weight:700;">${n}</span>` : n; }).join(' · ');
+  return part + (rows.length>3 ? ` · <span class="cell-sub">+${rows.length-3} more</span>` : '');
+}
+function invListHtml(rows, whFilter, allMode){
+  const shown = rows.slice(0, invLimit);
+  if(!shown.length) return `<div class="empty-state">No POSM matches this filter.</div>`;
+  const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+  return `<div class="table-wrap"><table class="inv-table"><thead><tr><th>POSM</th><th>Type</th><th>BU</th><th>Status</th><th style="text-align:right;">${whFilter==='all'?'Total Qty':'Qty'}</th><th style="text-align:right;">Beginning</th>${allMode?'<th>Where it is</th>':'<th>Actions</th>'}</tr></thead><tbody>
+    ${shown.map(p=>{
+      const qty = totalQtyForPosm(p.code, whFilter), beg = totalBeginningForPosm(p.code, whFilter);
+      const needsDispose = p.status==='expired' || p.status==='obsolete';
+      return `<tr><td><div class="row-flex">${tile(p,34)}<div><div class="cell-main">${p.code}</div><div class="cell-sub" title="${p.desc}">${p.desc}</div></div></div></td>
+        <td class="cell-sub">${p.type}</td><td>${buLabel(p.bu)}</td><td><span class="badge ${p.status}">${cap(p.status)}</span></td>
+        <td class="qty-strong" style="text-align:right;">${qty.toLocaleString()}</td><td class="cell-sub" style="text-align:right;">${beg.toLocaleString()}</td>
+        ${allMode ? `<td style="font-size:12px;">${whereShort(p.code)}</td>` : `<td><div class="row-flex" style="gap:6px;flex-wrap:nowrap;">
+          <select class="status-select admin-only" data-status-code="${p.code}" style="width:auto;">
+            ${['active','expired','obsolete','deleted'].map(v=>`<option value="${v}" ${p.status===v?'selected':''}>${cap(v)}</option>`).join('')}
+          </select>
+          <button class="btn sm" data-qr="${p.code}" title="Barcode label">${icon('barcode',12)}</button>
+          ${needsDispose ? `<button class="btn danger sm" data-dispose="${p.code}" title="Dispose">${icon('trash',12)}</button>` : ''}</div></td>`}</tr>`;
+    }).join('')}
+  </tbody></table></div>`;
+}
+let invLimit = INV_PAGE, invSearchTimer = null; // region accounts: 'mine' = own region only, 'all' = every warehouse (view only)
 function renderInventory(){
   if(isRegionUser() && invScope==='all' && DATA_ALL){
     // Temporarily look at every warehouse's stock, then switch back.
@@ -2249,7 +2465,7 @@ function renderInventoryCore(allMode){
     <div class="panel">
       <div class="panel-head">
         <div><h3>${isRegionUser() ? (allMode ? 'All Warehouse Inventory' : 'My Inventory — '+escHtml(session.region)) : 'All Inventory'}</h3><div class="panel-sub">${allMode ? 'Stock across every warehouse in all regions (view only) — use this to find which warehouse has the POSM you need' : (isRegionUser() ? 'Stock of your region\'s warehouses — Stock In / Stock Out quantity here (new POSM are added by Admin)' : 'All POSM — mark items that need disposal as Expired/Obsolete, or Delete if no longer used at all')}</div></div>
-        <div class="panel-actions"><button class="btn" id="btnGoScan">${icon('scan',14)} Scan</button><button class="btn primary" id="btnStockIn">${icon('plus',14)} Stock In</button><button class="btn" id="btnStockOut">${icon('arrowDown',14)} Stock Out</button><button class="btn sm" id="btnExportInventory">⬇ Excel</button></div>
+        <div class="panel-actions"><button class="btn" id="btnGoScan">${icon('scan',14)} Scan</button><button class="btn primary" id="btnStockIn">${icon('plus',14)} Stock In</button><button class="btn" id="btnStockOut">${icon('arrowDown',14)} Stock Out</button><button class="btn sm" id="btnExportInventory">${icon('download',13)} Excel</button></div>
       </div>
       ${isRegionUser() ? `<div class="seg" id="invScopeSeg" style="margin-bottom:12px;">
         <button data-scope="mine" class="${invScope==='mine'?'active':''}">My Inventory (${escHtml(session.region)})</button>
@@ -2258,10 +2474,11 @@ function renderInventoryCore(allMode){
       <div class="filters">
         <input type="text" id="invSearch" placeholder="Search POSM code or description..." value="${invFilters.search}">
         <select id="invBuFilter"><option value="all">All Business Units</option>${BUS.map(b=>`<option value="${b}" ${invFilters.bu===b?'selected':''}>${buLabel(b)}</option>`).join('')}</select>
+        <div class="seg" id="invViewSeg" title="Card or list view"><button data-view="cards" class="${invView==='cards'?'active':''}" aria-label="Card view">${icon('grid',14)} Cards</button><button data-view="list" class="${invView==='list'?'active':''}" aria-label="List view">${icon('list',14)} List</button></div>
         <div class="seg" id="invStatusSeg">${['all','active','disposal','expired','obsolete','deleted'].map(s=>`<button data-status="${s}" class="${invFilters.status===s?'active':''}">${s==='all'?'All':s==='disposal'?'For Disposal':s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}</div>
       </div>
-      <div class="inv-grid">
-        ${rows.map(p=>{
+      ${invView==='list' ? invListHtml(rows, whFilter, allMode) : `<div class="inv-grid">
+        ${rows.slice(0, invLimit).map(p=>{
           const qty = totalQtyForPosm(p.code, whFilter);
           const beg = totalBeginningForPosm(p.code, whFilter);
           const needsDispose = p.status==='expired'||p.status==='obsolete';
@@ -2289,7 +2506,8 @@ function renderInventoryCore(allMode){
             </div>
           </div>`;
         }).join('') || `<div class="empty-state" style="grid-column:1/-1;">No POSM matches this filter.</div>`}
-      </div>
+      </div>`}
+      ${rows.length > invLimit ? `<div style="text-align:center;margin-top:14px;"><button class="btn" id="invMoreBtn">Show more (${(rows.length-invLimit).toLocaleString()} more of ${rows.length.toLocaleString()})</button></div>` : (rows.length > INV_PAGE ? `<div class="cell-sub" style="text-align:center;margin-top:12px;">Showing all ${rows.length.toLocaleString()} POSM</div>` : '')}
     </div>
     <div class="section-row cols-2" style="margin-top:16px;">
       <div class="panel"><div class="panel-head"><div><h3>Stock by Warehouse</h3><div class="panel-sub">Breakdown of the filtered POSM list above</div></div></div>
@@ -2309,23 +2527,34 @@ function renderInventoryCore(allMode){
     exportRowsToExcel(exportRows, 'All-Inventory-'+todayStr()+'.xlsx', 'All Inventory');
   });
   const scopeSeg = document.getElementById('invScopeSeg');
-  if(scopeSeg) scopeSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{ invScope = b.dataset.scope; renderInventory(); }));
-  document.getElementById('invSearch').addEventListener('input', e=>{ invFilters.search=e.target.value; renderInventory(); });
-  document.getElementById('invBuFilter').addEventListener('change', e=>{ invFilters.bu=e.target.value; renderInventory(); });
-  document.getElementById('invStatusSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ invFilters.status=b.dataset.status; renderInventory(); }));
+  if(scopeSeg) scopeSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{ invScope = b.dataset.scope; invLimit = INV_PAGE; renderInventory(); }));
+  document.getElementById('invSearch').addEventListener('input', e=>{
+    invFilters.search = e.target.value; clearTimeout(invSearchTimer);
+    invSearchTimer = setTimeout(()=>{ invLimit = INV_PAGE; renderInventory(); }, 220);
+  });
+  document.getElementById('invBuFilter').addEventListener('change', e=>{ invFilters.bu=e.target.value; invLimit = INV_PAGE; renderInventory(); });
+  document.getElementById('invStatusSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ invFilters.status=b.dataset.status; invLimit = INV_PAGE; renderInventory(); }));
+  document.getElementById('invViewSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{
+    invView = b.dataset.view; try{ localStorage.setItem('rmas_inv_view', invView); }catch(e){}
+    renderInventory();
+  }));
+  const moreBtn = document.getElementById('invMoreBtn');
+  if(moreBtn) moreBtn.addEventListener('click', ()=>{ const y = window.scrollY; invLimit += INV_PAGE*2; renderInventory(); window.scrollTo(0, y); });
   document.querySelectorAll('[data-dispose]').forEach(b=>b.addEventListener('click',()=>disposeItem(b.dataset.dispose)));
   document.querySelectorAll('[data-qr]').forEach(b=>b.addEventListener('click',()=>openQrModal(b.dataset.qr)));
   document.getElementById('btnGoScan').addEventListener('click',()=>{ currentSection='scan'; renderAll(); });
   document.querySelectorAll('[data-status-code]').forEach(sel=>sel.addEventListener('change', ()=>changeStatus(sel.dataset.statusCode, sel.value)));
-  loadImagesFor(rows.map(p=>p.code));
+  loadImagesFor(rows.slice(0, invLimit).map(p=>p.code));
   if(invFilters.search){ const si = document.getElementById('invSearch'); si.focus(); si.setSelectionRange(si.value.length, si.value.length); }
 
   destroyCharts(['chartInvByWh','chartInvByBu']);
   const c = getChartColors();
+  const invWh = WAREHOUSES.map(w=>({name:w.name, qty: rows.reduce((s,p)=>s+ (invRow(w.id,p.code)?invRow(w.id,p.code).qty:0),0)})).sort((a,b)=>b.qty-a.qty);
+  fitBarHeight('chartInvByWh', invWh.length);
   charts.chartInvByWh = safeChart(document.getElementById('chartInvByWh'), {
     type:'bar',
-    data:{ labels: WAREHOUSES.map(w=>w.name), datasets:[{ label:'Qty', data: WAREHOUSES.map(w=> rows.reduce((s,p)=>s+ (invRow(w.id,p.code)?invRow(w.id,p.code).qty:0),0)), backgroundColor:c.primary, borderRadius:6, maxBarThickness:32 }]},
-    options: baseChartOpts(c,{legend:false})
+    data:{ labels: invWh.map(w=>w.name), datasets:[{ label:'Qty', data: invWh.map(w=>w.qty), backgroundColor:c.primary, borderRadius:5, maxBarThickness:22 }]},
+    options: hbarOpts(c,{legend:false})
   });
   charts.chartInvByBu = safeChart(document.getElementById('chartInvByBu'), {
     type:'doughnut',
@@ -2338,12 +2567,24 @@ function renderInventoryCore(allMode){
 // Scan batches store the delivery receipt once (on the batch's first row);
 // every row in the batch shares its SCAN-xxxx id in "ref", so any row can
 // show that same receipt.
+// Has a receipt photo? (the photo itself is only downloaded when "View" is clicked)
 function txnReceipt(t){
-  if(t.receiptImage) return t.receiptImage;
+  if(t.receiptImage || t.hasReceipt) return true;
   const m = String(t.ref||'').match(/SCAN-[A-Z0-9]+/);
-  if(!m) return '';
-  const f = DATA.transactions.find(x=>x.receiptImage && String(x.ref||'').includes(m[0]));
-  return f ? f.receiptImage : '';
+  if(!m) return false;
+  return DATA.transactions.some(x=>(x.receiptImage || x.hasReceipt) && String(x.ref||'').includes(m[0]));
+}
+async function openTxnReceipt(t){
+  if(t.receiptImage){ openReceiptLightbox(t.receiptImage, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')'); return; }
+  const m = String(t.ref||'').match(/SCAN-[A-Z0-9]+/);
+  const local = m ? DATA.transactions.find(x=>x.receiptImage && String(x.ref||'').includes(m[0])) : null;
+  if(local){ openReceiptLightbox(local.receiptImage, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')'); return; }
+  if(!USE_DB) return;
+  try{
+    const res = await postAction('getReceipt', Object.assign({id: t.id}, readCreds()));
+    if(res.image) openReceiptLightbox(res.image, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')');
+    else alert('No receipt photo found for this entry.');
+  }catch(e){ alert(e.message || 'Could not load the receipt photo.'); }
 }
 function payload_sign(p){ return p && p.mode==='out' ? '−' : '+'; }
 let stockflowFilter = 'all';
@@ -2355,9 +2596,10 @@ function renderStockflow(){
     else txns = txns.filter(t=>t.type===stockflowFilter);
   }
   txns.sort((a,b)=> new Date(b.date)-new Date(a.date));
-  const totalIn = DATA.transactions.filter(t=>t.type==='in'&&(whFilter==='all'||t.warehouseId===whFilter)&&matchesBUFilter(t.posmCode)).reduce((s,t)=>s+t.qty,0);
-  const totalOut = DATA.transactions.filter(t=>t.type==='out'&&(whFilter==='all'||t.warehouseId===whFilter)&&matchesBUFilter(t.posmCode)).reduce((s,t)=>s+t.qty,0);
-  const totalDisposed = DATA.transactions.filter(t=>t.type==='out'&&t.reason.startsWith('Disposed')&&(whFilter==='all'||t.warehouseId===whFilter)&&matchesBUFilter(t.posmCode)).reduce((s,t)=>s+t.qty,0);
+  const io = hasIo() ? ioRows(whFilter) : null;
+  const totalIn = io ? io.reduce((s,r)=>s+r.in,0) : DATA.transactions.filter(t=>t.type==='in'&&(whFilter==='all'||t.warehouseId===whFilter)&&matchesBUFilter(t.posmCode)).reduce((s,t)=>s+t.qty,0);
+  const totalOut = io ? io.reduce((s,r)=>s+r.out,0) : DATA.transactions.filter(t=>t.type==='out'&&(whFilter==='all'||t.warehouseId===whFilter)&&matchesBUFilter(t.posmCode)).reduce((s,t)=>s+t.qty,0);
+  const totalDisposed = io ? io.reduce((s,r)=>s+r.disp,0) : DATA.transactions.filter(t=>t.type==='out'&&String(t.reason||'').startsWith('Disposed')&&(whFilter==='all'||t.warehouseId===whFilter)&&matchesBUFilter(t.posmCode)).reduce((s,t)=>s+t.qty,0);
   const html = `
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Total Stock In</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('arrowUp',16)}</div></div><div class="kpi-value">${totalIn.toLocaleString()}</div><div class="kpi-delta flat">All newly arrived POSM</div></div>
@@ -2366,7 +2608,7 @@ function renderStockflow(){
     </div>
     <div class="panel">
       <div class="panel-head"><div><h3>Stock In / Out Log</h3><div class="panel-sub">Transaction history per warehouse — starts blank until activity is logged</div></div>
-        <div class="panel-actions"><button class="btn" id="btnGoScan2">${icon('scan',14)} Scan</button><button class="btn primary" id="btnStockIn2">${icon('plus',14)} Stock In</button><button class="btn" id="btnStockOut2">${icon('arrowDown',14)} Stock Out</button><button class="btn sm" id="btnExportStockflow">⬇ Excel</button></div></div>
+        <div class="panel-actions"><button class="btn" id="btnGoScan2">${icon('scan',14)} Scan</button><button class="btn primary" id="btnStockIn2">${icon('plus',14)} Stock In</button><button class="btn" id="btnStockOut2">${icon('arrowDown',14)} Stock Out</button><button class="btn sm" id="btnExportStockflow">${icon('download',13)} Excel</button></div></div>
       <div class="filters"><div class="seg" id="sfSeg">${[['all','All'],['in','Stock In'],['out','Stock Out'],['transfer','Transfers']].map(([k,l])=>`<button data-k="${k}" class="${stockflowFilter===k?'active':''}">${l}</button>`).join('')}</div></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Date</th><th>Type</th><th>POSM</th><th>Warehouse</th><th>Qty</th><th>Reason / Reference</th><th>Receipt</th></tr></thead>
@@ -2404,8 +2646,7 @@ function renderStockflow(){
   document.getElementById('sfSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ stockflowFilter=b.dataset.k; renderStockflow(); }));
   document.querySelectorAll('[data-receipt]').forEach(b=>b.addEventListener('click',()=>{
     const t = DATA.transactions.find(x=>x.id===b.dataset.receipt);
-    const img = t ? txnReceipt(t) : '';
-    if(img) openReceiptLightbox(img, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')');
+    if(t) openTxnReceipt(t);
   }));
   document.getElementById('btnGoScan2').addEventListener('click',()=>{ currentSection='scan'; renderAll(); });
 }
@@ -2424,7 +2665,7 @@ function renderRequests(){
   const html = `
     <div class="panel-head" style="margin-bottom:14px;">
       <div class="seg"><button data-v="board" class="${reqView==='board'?'active':''}">Requests Board</button><button data-v="transfers" class="${reqView==='transfers'?'active':''}">Transfer POSM</button></div>
-      <div class="panel-actions">${reqView==='board' ? `<button class="btn primary" id="btnNewReq">${icon('plus',14)} New Request</button>` : `<button class="btn primary" id="btnNewTrf">${icon('transfer',14)} New Transfer</button>`}<button class="btn sm" id="btnExportReqTrf">⬇ Excel</button></div>
+      <div class="panel-actions">${reqView==='board' ? `<button class="btn primary" id="btnNewReq">${icon('plus',14)} New Request</button>` : `<button class="btn primary" id="btnNewTrf">${icon('transfer',14)} New Transfer</button>`}<button class="btn sm" id="btnExportReqTrf">${icon('download',13)} Excel</button></div>
     </div>
     <div id="reqViewRoot"></div>
   `;
@@ -2465,7 +2706,7 @@ function renderRequests(){
                 <div class="kcard-desc">${p?p.desc:''} · Qty ${r.qty}</div>
                 <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>
                 <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.dueDate?'Due '+fmtDateShort(r.dueDate):''}</span></div>
-                ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span>🎯 ${r.purpose}</span></div>`:''}
+                ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span style="display:inline-flex;align-items:center;gap:4px;">${icon('target',12)} ${r.purpose}</span></div>`:''}
                 ${r.createdBy?`<div class="kcard-meta" style="margin-top:2px;"><span>Created by ${r.createdBy}</span></div>`:''}
                 ${r.status!=='delivered' ? `<div class="kcard-actions"><button class="btn sm primary" data-advance="${r.id}" style="flex:1">${r.status==='for_sorting'?'Move to For Delivery':'Mark Delivered'}</button></div>` : `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span></div>`}
               </div>`;
@@ -2525,8 +2766,8 @@ function renderRejected(){
   const rejectedTransfers = DATA.transfers.filter(t=>t.status==='rejected' && (whFilter==='all'||t.fromWarehouseId===whFilter||t.toWarehouseId===whFilter) && matchesBUFilter(t.posmCode));
   const isAdmin = USE_DB && session && session.role==='admin';
   const html = `
-    ${isAdmin ? `<div class="notice"><div style="flex:1;">Seeing a request that was rejected but is still stuck in "For Sorting"? That can happen for items rejected before this page existed. Run a one-time repair to fix any leftover records.</div><button class="btn sm" id="btnRepairRejected" style="flex-shrink:0;">🔧 Repair Stuck Records</button></div>` : ''}
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn sm" id="btnExportRejected">⬇ Excel</button></div>
+    ${isAdmin ? `<details class="howto"><summary>${icon('info',15)} Fix rejected items stuck in "For Sorting"<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice"><div style="flex:1;">Seeing a request that was rejected but is still stuck in "For Sorting"? That can happen for items rejected before this page existed. Run a one-time repair to fix any leftover records.</div><button class="btn sm" id="btnRepairRejected" style="flex-shrink:0;">${icon('wrench',13)} Repair Stuck Records</button></div></details>` : ''}
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn sm" id="btnExportRejected">${icon('download',13)} Excel</button></div>
     <div class="panel" style="margin-bottom:16px;">
       <div class="panel-head"><div><h3>Rejected Submissions</h3><div class="panel-sub">${rejectedSubs.length} Stock In / Stock Out / Scan / New POSM / other action(s) that Admin rejected — nothing was changed</div></div></div>
       <div class="table-wrap"><table>
@@ -2601,7 +2842,7 @@ function renderRejected(){
       }catch(e){
         alert('Repair failed: ' + e.message);
       } finally {
-        btn.disabled = false; btn.textContent = '🔧 Repair Stuck Records';
+        btn.disabled = false; btn.innerHTML = icon('wrench',13) + ' Repair Stuck Records';
       }
     });
   }
@@ -2681,7 +2922,7 @@ function renderMetrics(){
     </div>` : ''}
     <div class="panel">
       <div class="panel-head"><div><h3>Performance per Trade Supervisor</h3><div class="panel-sub">${tsStats.length} of ${tsNamesArray().length} TS with logged requests — appears here once requests are created</div></div>
-        <button class="btn sm" id="btnExportMetrics">⬇ Excel</button></div>
+        <button class="btn sm" id="btnExportMetrics">${icon('download',13)} Excel</button></div>
       <div class="table-wrap"><table><thead><tr><th>Trade Supervisor</th><th>Total Requests</th><th>Delivered</th><th>Late</th><th>On-time Rate</th></tr></thead>
         <tbody>
         ${tsStats.map(t=>`<tr><td class="cell-main">${t.ts}</td><td>${t.total}</td><td>${t.delivered}</td><td>${t.late>0?`<span class="badge late">${t.late}</span>`:'0'}</td>
@@ -2720,7 +2961,7 @@ function begInsightsHtml(perWh, totalCur, totalBeg, totalIO, posmList){
   const out = [];
   const fmt = n => Number(n||0).toLocaleString();
   const pct = (a,b) => b ? Math.round(a/b*100) : 0;
-  const row = (emoji, bg, html) => out.push(`<div class="insight-row"><div class="insight-dot" style="background:${bg};">${emoji}</div><div>${html}</div></div>`);
+  const row = (ico, bg, html) => out.push(`<div class="insight-row"><div class="insight-dot" style="background:${bg};color:var(--ink-soft);">${icon(ico,15)}</div><div>${html}</div></div>`);
 
   // 1) Where the stock is
   const ranked = perWh.filter(r=>r.cur>0).sort((a,b)=>b.cur-a.cur);
@@ -2728,34 +2969,36 @@ function begInsightsHtml(perWh, totalCur, totalBeg, totalIO, posmList){
     const top = ranked[0];
     const top3 = ranked.slice(0,3);
     const top3Share = pct(top3.reduce((s,r)=>s+r.cur,0), totalCur);
-    row('🏬','var(--primary-tint)', `<b>${top.w.name}</b> holds <b>${pct(top.cur,totalCur)}%</b> of all stock (${fmt(top.cur)} pcs).${ranked.length>=3 ? ` The top 3 warehouses (${top3.map(r=>r.w.name).join(', ')}) hold <b>${top3Share}%</b>.` : ''}`);
+    row('store','var(--primary-tint)', `<b>${top.w.name}</b> holds <b>${pct(top.cur,totalCur)}%</b> of all stock (${fmt(top.cur)} pcs).${ranked.length>=3 ? ` The top 3 warehouses (${top3.map(r=>r.w.name).join(', ')}) hold <b>${top3Share}%</b>.` : ''}`);
   }
 
   // 2) Empty warehouses
   const empty = perWh.filter(r=>r.cur<=0);
   if(empty.length){
-    row('⚠️','var(--warning-bg)', `<b>${empty.length} warehouse${empty.length>1?'s have':' has'} no stock</b>: ${empty.map(r=>r.w.name).join(', ')}. Requests from these areas will need a transfer or delivery from another warehouse.`);
+    row('alert','var(--warning-bg)', `<b>${empty.length} warehouse${empty.length>1?'s have':' has'} no stock</b>: ${empty.map(r=>r.w.name).join(', ')}. Requests from these areas will need a transfer or delivery from another warehouse.`);
   }
 
   // 3) Movement since the beginning stock
   if(!totalIO.sIn && !totalIO.sOut){
-    row('🟢','var(--success-bg)', `<b>No stock movement yet.</b> Current stock is exactly the same as the Beginning Stock in every warehouse.`);
+    row('check','var(--success-bg)', `<b>No stock movement yet.</b> Current stock is exactly the same as the Beginning Stock in every warehouse.`);
   } else {
-    row('🔄','var(--primary-tint)', `Since the beginning: <b style="color:var(--success);">+${fmt(totalIO.sIn)}</b> stocked in and <b style="color:var(--danger);">-${fmt(totalIO.sOut)}</b> stocked out — <b>${pct(totalIO.sOut,totalBeg)}%</b> of the beginning stock has been released.`);
+    row('refresh','var(--primary-tint)', `Since the beginning: <b style="color:var(--success);">+${fmt(totalIO.sIn)}</b> stocked in and <b style="color:var(--danger);">-${fmt(totalIO.sOut)}</b> stocked out — <b>${pct(totalIO.sOut,totalBeg)}%</b> of the beginning stock has been released.`);
     const moved = perWh.filter(r=>r.variance!==0);
     const up = moved.filter(r=>r.variance>0).sort((a,b)=>b.variance-a.variance)[0];
     const down = moved.filter(r=>r.variance<0).sort((a,b)=>a.variance-b.variance)[0];
     if(up || down){
-      row('📊','var(--surface)', [
+      row('chart','var(--surface)', [
         up ? `Biggest increase: <b>${up.w.name}</b> (<span style="color:var(--success);font-weight:700;">+${fmt(up.variance)}</span>)` : '',
         down ? `Biggest decrease: <b>${down.w.name}</b> (<span style="color:var(--danger);font-weight:700;">${fmt(down.variance)}</span>)` : ''
       ].filter(Boolean).join('<br>'));
     }
     // Most released POSM
     const outBy = {};
-    (DATA.transactions||[]).forEach(t=>{ if(t.type==='out' && posmList.some(p=>p.code===t.posmCode)) outBy[t.posmCode]=(outBy[t.posmCode]||0)+(Number(t.qty)||0); });
+    const inList = new Set(posmList.map(p=>p.code));
+    if(hasIo()) DATA.ioSummary.forEach(r=>{ if(r.out && inList.has(r.c)) outBy[r.c]=(outBy[r.c]||0)+r.out; });
+    else (DATA.transactions||[]).forEach(t=>{ if(t.type==='out' && inList.has(t.posmCode)) outBy[t.posmCode]=(outBy[t.posmCode]||0)+(Number(t.qty)||0); });
     const topOut = Object.entries(outBy).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    if(topOut.length) row('🚚','var(--danger-bg)', `Most stocked-out POSM: ${topOut.map(([c,q])=>`<b>${c}</b> (${fmt(q)})`).join(', ')}.`);
+    if(topOut.length) row('truck','var(--danger-bg)', `Most stocked-out POSM: ${topOut.map(([c,q])=>`<b>${c}</b> (${fmt(q)})`).join(', ')}.`);
   }
 
   // 4) POSM availability
@@ -2763,10 +3006,32 @@ function begInsightsHtml(perWh, totalCur, totalBeg, totalIO, posmList){
   let zero=0, low=0;
   posmList.forEach(p=>{ const q = totalQtyForPosm(p.code,'all'); if(q<=0) zero++; else if(q<=threshold) low++; });
   if(posmList.length){
-    row('📦', zero? 'var(--danger-bg)':'var(--success-bg)', `Out of ${fmt(posmList.length)} POSM: <b>${fmt(zero)}</b> have zero stock in all warehouses and <b>${fmt(low)}</b> are running low (${threshold} pcs or less).`);
+    row('box', zero? 'var(--danger-bg)':'var(--success-bg)', `Out of ${fmt(posmList.length)} POSM: <b>${fmt(zero)}</b> have zero stock in all warehouses and <b>${fmt(low)}</b> are running low (${threshold} pcs or less).`);
   }
 
-  return out.length ? `<div class="insights"><h4>💡 Insights</h4>${out.join('')}</div>` : '';
+  return out.length ? `<div class="insights"><h4>${icon('bulb',15)} Insights</h4>${out.join('')}</div>` : '';
+}
+/* ---- Totals over ALL transactions, computed by the server (ioSummary). Older Code.gs
+   versions don't send it; then the screens fall back to the transaction list. ---- */
+function expandIoRow(a){
+  return Array.isArray(a) ? {w:a[0], c:a[1], in:+a[2]||0, out:+a[3]||0, tin:+a[4]||0, tout:+a[5]||0, disp:+a[6]||0, d60n:+a[7]||0, d60q:+a[8]||0, in30:+a[9]||0, out30:+a[10]||0} : a;
+}
+function hasIo(){ return !!(DATA && Array.isArray(DATA.ioSummary)); }
+function ioRows(whFilter){ return DATA.ioSummary.filter(r=>(!whFilter || whFilter==='all' || r.w===whFilter) && matchesBUFilter(r.c)); }
+let _ioByCodeSrc = null, _ioByCode = new Map();
+function ioByCode(code){
+  if(_ioByCodeSrc !== DATA.ioSummary){ _ioByCode = new Map(); DATA.ioSummary.forEach(r=>{ let l=_ioByCode.get(r.c); if(!l){ l=[]; _ioByCode.set(r.c,l); } l.push(r); }); _ioByCodeSrc = DATA.ioSummary; }
+  return _ioByCode.get(code) || [];
+}
+// Dispatches in the last 60 days for one POSM (optionally one warehouse): {events, qty}
+function dispatch60(code, whFilter){
+  if(hasIo()){
+    let events=0, qty=0;
+    ioByCode(code).forEach(r=>{ if(!whFilter || whFilter==='all' || r.w===whFilter){ events += r.d60n; qty += r.d60q; } });
+    return {events, qty};
+  }
+  const outTxns = DATA.transactions.filter(t=>t.type==='out' && t.posmCode===code && String(t.reason||'').includes('Dispatched') && new Date(t.date) >= new Date(Date.now()-60*86400000) && (!whFilter || whFilter==='all' || t.warehouseId===whFilter));
+  return {events: outTxns.length, qty: outTxns.reduce((s,t)=>s+(Number(t.qty)||0),0)};
 }
 /* Stock In / Stock Out totals since the beginning stock.
    Per warehouse, transfers count too (they really add/remove stock there).
@@ -2774,6 +3039,15 @@ function begInsightsHtml(perWh, totalCur, totalBeg, totalIO, posmList){
    between warehouses — so Beginning + Stock In − Stock Out = Current. */
 function inOutTotals(filterFn, includeTransfers){
   let sIn=0, sOut=0;
+  if(hasIo()){
+    DATA.ioSummary.forEach(r=>{
+      if(!r._t) Object.defineProperty(r, '_t', {value:{posmCode:r.c, warehouseId:r.w}, enumerable:false});
+      if(!filterFn(r._t)) return;
+      sIn += r.in + (includeTransfers ? r.tin : 0);
+      sOut += r.out + (includeTransfers ? r.tout : 0);
+    });
+    return {sIn, sOut};
+  }
   (DATA.transactions||[]).forEach(t=>{
     if(!filterFn(t)) return;
     const q = Number(t.qty)||0;
@@ -2799,7 +3073,7 @@ function renderBeginning(){
   });
   const ioCell = (n, sign)=> n ? `<span style="color:${sign==='+'?'var(--success)':'var(--danger)'};font-weight:600;">${sign}${n.toLocaleString()}</span>` : '<span style="color:var(--ink-faint);">0</span>';
   const html = `
-    <div class="notice">${icon('alert',16)}<div>The <b>Beginning Stock</b> here is each POSM's current stock count from when the real data was first loaded into this tool. As you use Stock In/Out, Requests, and Transfers, this shows the variance from that baseline.</div></div>
+    <details class="howto"><summary>${icon('info',15)} How Beginning Stock works<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('alert',16)}<div>The <b>Beginning Stock</b> here is each POSM's current stock count from when the real data was first loaded into this tool. As you use Stock In/Out, Requests, and Transfers, this shows the variance from that baseline.</div></div></details>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Overall Beginning Stock</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('beginning',16)}</div></div><div class="kpi-value">${totalBeg.toLocaleString()}</div><div class="kpi-delta flat">Baseline, all warehouses</div></div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Current Total Stock</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('inventory',16)}</div></div><div class="kpi-value">${totalCur.toLocaleString()}</div><div class="kpi-delta flat">Current total</div></div>
@@ -2816,7 +3090,7 @@ function renderBeginning(){
         </tbody></table></div></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div><h3>Beginning Stock per POSM (all warehouses)</h3><div class="panel-sub">${begPosmList.length} POSM — scroll inside the table to see all</div></div><button class="btn sm" id="btnExportBeginning">⬇ Excel</button></div>
+      <div class="panel-head"><div><h3>Beginning Stock per POSM (all warehouses)</h3><div class="panel-sub">${begPosmList.length} POSM — scroll inside the table to see all</div></div><button class="btn sm" id="btnExportBeginning">${icon('download',13)} Excel</button></div>
       <div class="table-wrap scroll-y" style="max-height:560px;"><table><thead><tr><th>POSM</th><th>Business Unit</th><th>Beginning Stock</th><th>Stock In</th><th>Stock Out</th><th>Current Stock</th><th>Variance</th></tr></thead><tbody>
         ${begPosmList.map(p=>{
           const beg = totalBeginningForPosm(p.code,'all'); const cur = totalQtyForPosm(p.code,'all'); const v = cur-beg;
@@ -2840,11 +3114,13 @@ function renderBeginning(){
   });
   destroyCharts(['chartBegWh']);
   const c = getChartColors();
+  const begSorted = perWh.slice().sort((a,b)=>b.cur-a.cur);
+  fitBarHeight('chartBegWh', begSorted.length, 34);
   charts.chartBegWh = safeChart(document.getElementById('chartBegWh'), {
-    type:'bar', data:{ labels: perWh.map(r=>r.w.name),
-      datasets:[{label:'Beginning Stock', data:perWh.map(r=>r.beg), backgroundColor:c.ink3, borderRadius:5, maxBarThickness:28},
-        {label:'Current Stock', data:perWh.map(r=>r.cur), backgroundColor:c.primary, borderRadius:5, maxBarThickness:28}]},
-    options: baseChartOpts(c,{legend:true})
+    type:'bar', data:{ labels: begSorted.map(r=>r.w.name),
+      datasets:[{label:'Beginning Stock', data:begSorted.map(r=>r.beg), backgroundColor:c.ink3, borderRadius:4, maxBarThickness:14},
+        {label:'Current Stock', data:begSorted.map(r=>r.cur), backgroundColor:c.primary, borderRadius:4, maxBarThickness:14}]},
+    options: hbarOpts(c,{legend:true})
   });
 }
 
@@ -2854,7 +3130,7 @@ function movementCounts(whFilter, buFilter){
   let fast=0, low=0, non=0;
   DATA.posmMaster.forEach(p=>{
     if(buFilter!=='all' && p.bu!==buFilter) return;
-    const outEvents = DATA.transactions.filter(t=>t.type==='out' && t.posmCode===p.code && t.reason.includes('Dispatched') && new Date(t.date) >= new Date(Date.now()-60*86400000) && (whFilter==='all'||t.warehouseId===whFilter)).length;
+    const outEvents = dispatch60(p.code, whFilter).events;
     if(outEvents>=3) fast++; else if(outEvents>=1) low++; else non++;
   });
   return {fast,low,non};
@@ -2863,22 +3139,22 @@ function renderMovement(){
   const whFilter = currentFilterWarehouse();
   const buFilter = currentFilterBU();
   const rows = DATA.posmMaster.filter(p=>buFilter==='all'||p.bu===buFilter).map(p=>{
-    const outTxns = DATA.transactions.filter(t=>t.type==='out' && t.posmCode===p.code && t.reason.includes('Dispatched') && new Date(t.date) >= new Date(Date.now()-60*86400000) && (whFilter==='all'||t.warehouseId===whFilter));
-    const outQty = outTxns.reduce((s,t)=>s+t.qty,0); const events = outTxns.length;
+    const d60 = dispatch60(p.code, whFilter);
+    const outQty = d60.qty; const events = d60.events;
     let cat = 'non', catLabel='Non-Moving';
     if(events>=3){ cat='fast'; catLabel='Fast Moving'; } else if(events>=1){ cat='low'; catLabel='Low Moving'; }
     return {p, outQty, events, cat, catLabel, curQty: totalQtyForPosm(p.code, whFilter)};
   }).sort((a,b)=>b.outQty-a.outQty);
   const counts = movementCounts(whFilter, buFilter);
   const html = `
-    <div class="notice">${icon('alert',16)}<div>This classification is based on the number of dispatch events in the last <b>60 days</b>: <b>Fast Moving</b> (3+ dispatches), <b>Low Moving</b> (1–2 dispatches), <b>Non-Moving</b> (0 dispatches). Since the data was just loaded, everything will show as Non-Moving until dispatches are logged via Requests or Stock Out.</div></div>
+    <details class="howto"><summary>${icon('info',15)} How movement is classified<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('alert',16)}<div>This classification is based on the number of dispatch events in the last <b>60 days</b>: <b>Fast Moving</b> (3+ dispatches), <b>Low Moving</b> (1–2 dispatches), <b>Non-Moving</b> (0 dispatches). Since the data was just loaded, everything will show as Non-Moving until dispatches are logged via Requests or Stock Out.</div></div></details>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Fast Moving</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('movement',16)}</div></div><div class="kpi-value">${counts.fast}</div><div class="kpi-delta flat">POSM types</div></div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Low Moving</span><div class="kpi-icon" style="background:var(--warning-bg);color:var(--warning)">${icon('movement',16)}</div></div><div class="kpi-value">${counts.low}</div><div class="kpi-delta flat">POSM types</div></div>
-      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Non-Moving</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('alert',16)}</div></div><div class="kpi-value">${counts.non}</div><div class="kpi-delta down">Review — may need disposal</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Non-Moving</span><div class="kpi-icon" style="background:var(--surface-alt);color:var(--ink-soft)">${icon('box',16)}</div></div><div class="kpi-value">${counts.non}</div><div class="kpi-delta down">Review — may need disposal</div></div>
     </div>
     <div class="panel" style="margin-bottom:16px;"><div class="panel-head"><div><h3>Dispatch Activity per POSM (60 days)</h3></div></div><div class="chart-wrap tall"><canvas id="chartMoveBar"></canvas></div></div>
-    <div class="panel"><div class="panel-head"><div><h3>Movement Detail</h3></div><button class="btn sm" id="btnExportMovement">⬇ Excel</button></div>
+    <div class="panel"><div class="panel-head"><div><h3>Movement Detail</h3></div><button class="btn sm" id="btnExportMovement">${icon('download',13)} Excel</button></div>
       <div class="table-wrap"><table><thead><tr><th>POSM</th><th>Category</th><th>Dispatch Events (60d)</th><th>Qty Dispatched (60d)</th><th>Current Stock</th></tr></thead><tbody>
         ${rows.slice(0,150).map(r=>`<tr><td><div class="row-flex">${tile(r.p,30)}<div><div class="cell-main">${r.p.code}</div><div class="cell-sub">${r.p.desc}</div></div></div></td>
           <td><span class="badge ${r.cat}">${r.catLabel}</span></td><td>${r.events}</td><td class="qty-strong">${r.outQty.toLocaleString()}</td><td>${r.curQty.toLocaleString()}</td></tr>`).join('')}
@@ -2895,7 +3171,7 @@ function renderMovement(){
   const c = getChartColors();
   const top = rows.slice(0,40);
   charts.chartMoveBar = safeChart(document.getElementById('chartMoveBar'), {
-    type:'bar', data:{ labels: top.map(r=>r.p.code), datasets:[{ label:'Qty dispatched (60d)', data: top.map(r=>r.outQty), backgroundColor: top.map(r=> r.cat==='fast'?c.success:r.cat==='low'?c.warning:c.danger), borderRadius:5, maxBarThickness:22 }]},
+    type:'bar', data:{ labels: top.map(r=>r.p.code), datasets:[{ label:'Qty dispatched (60d)', data: top.map(r=>r.outQty), backgroundColor: top.map(r=> r.cat==='fast'?c.success:r.cat==='low'?c.warning:c.ink3), borderRadius:5, maxBarThickness:22 }]},
     options: baseChartOpts(c,{legend:false})
   });
 }
@@ -2906,8 +3182,8 @@ function renderOrgManage(){
   const tsRows = activeTsList().filter(t=> regionFilter==='all' || t.region===regionFilter).sort((a,b)=>a.name.localeCompare(b.name));
   const storeRows = activeStoreList().filter(s=> regionFilter==='all' || s.region===regionFilter).sort((a,b)=>a.name.localeCompare(b.name));
   const html = `
-    <div class="notice">${icon('alert',16)}<div>Adding, renaming, reassigning, or removing a Trade Supervisor or Store here updates the picker lists in both this tool and the mobile Request Form. Every change is logged and visible in the Analytics export.</div></div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn sm" id="btnExportOrg">⬇ Excel</button></div>
+    <details class="howto admin-only"><summary>${icon('info',15)} About Trade Supervisors & Stores<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice admin-only">${icon('alert',16)}<div>Adding, renaming, reassigning, or removing a Trade Supervisor or Store here updates the picker lists in both this tool and the mobile Request Form. Every change is logged and visible in the Analytics export.</div></div></details>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn sm" id="btnExportOrg">${icon('download',13)} Excel</button></div>
     <div class="panel" style="margin-bottom:16px;">
       <div class="panel-head"><div><h3>Trade Supervisors</h3><div class="panel-sub">${tsRows.length} active</div></div>
         <div class="panel-actions admin-only"><button class="btn primary" id="btnNewTs">${icon('plus',14)} New Trade Supervisor</button></div></div>
@@ -3089,16 +3365,18 @@ async function reviewPendingItem(id, decision){
 
 async function viewPendingDetail(id){
   try{
-    const res = await fetch(APPS_SCRIPT_URL+'?action=getPendingItem&id='+encodeURIComponent(id)+'&t='+Date.now(), {redirect:'follow'}).then(r=>r.json());
-    if(res.error){ alert(res.error); return; }
-    const p = res.payload || {};
+    let res;
+    try{ res = await postAction('getPendingItem', Object.assign({id}, readCreds())); }
+    catch(err){ alert(err.message || 'Could not load the detail.'); return; }
+    const p = neutralizeDeep(res.payload || {}, '');
+    res.submittedBy = neutralizeText(res.submittedBy);
     const images = [];
-    if(p.receiptImage) images.push({label:'Delivery Receipt', src:p.receiptImage});
-    if(p.newPosmImage) images.push({label:'New POSM Photo', src:p.newPosmImage});
+    if(safeImgSrc(p.receiptImage)) images.push({label:'Delivery Receipt', src:safeImgSrc(p.receiptImage)});
+    if(safeImgSrc(p.newPosmImage)) images.push({label:'New POSM Photo', src:safeImgSrc(p.newPosmImage)});
     openModal('Submission Detail', `
       <div class="field"><label>Action</label><div class="cell-main">${pendingActionTypeLabel(res.action)}</div></div>
       <div class="field"><label>Summary</label><div class="cell-sub">${describePendingAction({action:res.action, payload:JSON.stringify(p)})}</div></div>
-      ${p.geo ? `<div class="field"><label>Submitted from</label><div class="cell-sub">📍 ${fmtDist(Number(p.geo.dist)||0)} from the warehouse (GPS ±${p.geo.acc} m) · <a href="https://www.google.com/maps?q=${p.geo.lat},${p.geo.lng}" target="_blank" rel="noopener">view on map</a></div></div>` : ''}
+      ${p.geo ? `<div class="field"><label>Submitted from</label><div class="cell-sub" style="display:flex;align-items:center;gap:5px;">${icon('pin',13)} ${fmtDist(Number(p.geo.dist)||0)} from the warehouse (GPS ±${p.geo.acc} m) · <a href="https://www.google.com/maps?q=${p.geo.lat},${p.geo.lng}" target="_blank" rel="noopener">view on map</a></div></div>` : ''}
       ${res.action==='stockBatch' && Array.isArray(p.items) ? `<div class="field"><label>Scanned POSM (${p.items.length})</label><div class="table-wrap" style="max-height:260px;overflow-y:auto;"><table><tbody>${p.items.map(i=>{ const pm = posmByCode(i.code); return `<tr><td><div class="cell-main">${i.code}</div><div class="cell-sub">${pm?pm.desc:''}</div></td><td class="qty-strong" style="text-align:right;">${payload_sign(p)}${i.qty}</td></tr>`; }).join('')}</tbody></table></div></div>` : ''}
       <div class="field"><label>Submitted by</label><div class="cell-sub">${res.submittedBy} · ${fmtDate(res.submittedAt)}</div></div>
       ${images.map(img=>`<div class="field"><label>${img.label}</label><img src="${img.src}" style="width:100%;border-radius:8px;border:1px solid var(--line);"></div>`).join('')}
@@ -3112,7 +3390,7 @@ function renderPendingApprovals(){
   const history = all.filter(p=>p.status!=='pending').sort((a,b)=>String(b.reviewedAt||b.submittedAt).localeCompare(String(a.reviewedAt||a.submittedAt))).slice(0,40);
   const html = `
     <div class="panel" style="margin-bottom:16px;">
-      <div class="panel-head"><div><h3>Awaiting Approval</h3><div class="panel-sub">${pending.length} submitted by Users</div></div></div>
+      <div class="panel-head"><div><h3>Awaiting Approval</h3><div class="panel-sub">${pending.length} submitted by Region accounts</div></div></div>
       ${pending.length ? pending.map(item=>`
         <div class="kcard" style="margin-bottom:10px;">
           <div class="kcard-top"><span class="badge fordelivery">${pendingActionTypeLabel(item.action)}</span><span class="cell-sub">${fmtDate(item.submittedAt)}</span></div>
@@ -3127,7 +3405,7 @@ function renderPendingApprovals(){
       `).join('') : `<div class="empty-state">Nothing is awaiting approval right now.</div>`}
     </div>
     <div class="panel">
-      <div class="panel-head"><div><h3>History</h3><div class="panel-sub">Most recently approved or rejected</div></div><button class="btn sm" id="btnExportPending">⬇ Excel</button></div>
+      <div class="panel-head"><div><h3>History</h3><div class="panel-sub">Most recently approved or rejected</div></div><button class="btn sm" id="btnExportPending">${icon('download',13)} Excel</button></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Action</th><th>Summary</th><th>Submitted By</th><th>Status</th><th>Reviewed By</th></tr></thead>
         <tbody>
@@ -3156,9 +3434,9 @@ function renderPendingApprovals(){
 function renderMySubmissions(){
   const mine = (DATA.pendingActions || []).filter(p=>p.submittedBy===session.name).sort((a,b)=>String(b.submittedAt).localeCompare(String(a.submittedAt)));
   const html = `
-    <div class="notice">${icon('alert',16)}<div>All your actions here (Stock In/Out, Requests, Transfers, etc.) go through Admin first before they take effect on the real data.</div></div>
+    <details class="howto"><summary>${icon('info',15)} How submissions work<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('alert',16)}<div>All your actions here (Stock In/Out, Requests, Transfers, etc.) go through Admin first before they take effect on the real data.</div></div></details>
     <div class="panel">
-      <div class="panel-head"><div><h3>My Submissions</h3><div class="panel-sub">${mine.length} total</div></div><button class="btn sm" id="btnExportMySubs">⬇ Excel</button></div>
+      <div class="panel-head"><div><h3>My Submissions</h3><div class="panel-sub">${mine.length} total</div></div><button class="btn sm" id="btnExportMySubs">${icon('download',13)} Excel</button></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Action</th><th>Summary</th><th>Date</th><th>Status</th></tr></thead>
         <tbody>
@@ -3205,6 +3483,21 @@ function baseChartOpts(c, opts={}){
   };
 }
 
+// Horizontal bars: warehouse names stay readable (no slanted labels) however many warehouses.
+function hbarOpts(c, opts={}){
+  const o = baseChartOpts(c, opts);
+  o.indexAxis = 'y';
+  o.interaction = { mode:'nearest', axis:'y', intersect:false };
+  o.scales = { x:{ grid:{color:c.line}, ticks:{color:c.ink, font:{size:10.5}}, beginAtZero:true },
+               y:{ grid:{display:false}, ticks:{color:c.ink, font:{size:11.5}, autoSkip:false} } };
+  return o;
+}
+// Give a horizontal bar chart enough height for all its bars.
+function fitBarHeight(canvasId, n, perBar){
+  const el = document.getElementById(canvasId); if(!el || !el.parentElement) return;
+  el.parentElement.style.height = Math.max(200, n*(perBar||26) + 56) + 'px';
+}
+
 /* ============================= MASTER RENDER ============================= */
 let lastRenderedSection = null;
 function renderAll(){
@@ -3227,6 +3520,8 @@ function renderSection(sectionChanged){
   if(currentSection!=='scan' && (scannerRunning || scanner)) stopScanner();
   const section = SECTIONS.find(s=>s.key===currentSection);
   document.getElementById('pageTitle').textContent = section.label;
+  const opBtn = document.getElementById('btnOnePager');
+  if(opBtn) opBtn.style.display = currentSection==='dashboard' ? '' : 'none';
   document.getElementById('pageSub').textContent = (isRegionUser() && section.regionSub) ? section.regionSub : section.sub;
   if(sectionChanged) closeSheets();
   renderTabbar();
@@ -3282,7 +3577,7 @@ function exportSheetsToExcel(sheets, filename){
 async function exportAnalyticsReport(asPdf){
   asPdf = asPdf===true;
   const btn = document.getElementById(asPdf ? 'exportAnalyticsPdfBtn' : 'exportAnalyticsBtn');
-  const originalLabel = btn.textContent;
+  const originalLabel = btn.innerHTML;
   btn.disabled = true; btn.textContent = 'Preparing report...';
   await new Promise(r=>setTimeout(r,30)); // let the "Preparing" label show
   try{
@@ -3306,7 +3601,7 @@ async function exportAnalyticsReport(asPdf){
       {Metric:'Total qty for disposal', Value:disposeQty},
       {Metric:'Pending requests (For Sorting + For Delivery)', Value:pendingReq.length},
       {Metric:'Delivered in last 7 days', Value:deliveredWeek.length},
-      {Metric:'Total stock in/out transactions logged', Value:DATA.transactions.length},
+      {Metric:'Total stock in/out transactions logged', Value:(DATA.txnCount!==undefined ? DATA.txnCount : DATA.transactions.length)},
       {Metric:'Total requests logged', Value:DATA.requests.length},
       {Metric:'Total transfers logged', Value:DATA.transfers.length},
     ];
@@ -3324,7 +3619,7 @@ async function exportAnalyticsReport(asPdf){
     const txnRows = DATA.transactions.map(t=>({
       Date:t.date, Type:t.type, 'POSM Code':t.posmCode, Description:(posmByCode(t.posmCode)||{}).desc||'',
       Warehouse:(whById(t.warehouseId)||{}).name||'', 'Qty Change':(t.type==='in'||t.type==='transfer_in'?'+':'-')+t.qty,
-      Reason:t.reason, Reference:t.ref||'', 'Has Receipt Photo':t.receiptImage?'Yes':'No'
+      Reason:t.reason, Reference:t.ref||'', 'Has Receipt Photo':(t.receiptImage||t.hasReceipt)?'Yes':'No'
     }));
     sheets.push({name:'Stock Movements', rows:txnRows});
 
@@ -3361,8 +3656,8 @@ async function exportAnalyticsReport(asPdf){
     sheets.push({name:'Beginning Stock', rows:begRows});
 
     const moveRows = DATA.posmMaster.map(p=>{
-      const outTxns = DATA.transactions.filter(t=>t.type==='out' && t.posmCode===p.code && t.reason.includes('Dispatched') && new Date(t.date) >= new Date(Date.now()-60*86400000));
-      const outQty = outTxns.reduce((s,t)=>s+t.qty,0), events = outTxns.length;
+      const d60 = dispatch60(p.code, 'all');
+      const outQty = d60.qty, events = d60.events;
       const cat = events>=3?'Fast Moving':events>=1?'Low Moving':'Non-Moving';
       return {'POSM Code':p.code, Description:p.desc, Category:cat, 'Dispatch Events (60d)':events, 'Qty Dispatched (60d)':outQty, 'Current Stock':totalQtyForPosm(p.code,'all')};
     });
@@ -3380,7 +3675,7 @@ async function exportAnalyticsReport(asPdf){
     if(asPdf) exportSectionsToPdf(sheets, 'RMAS-POSM-Analytics-'+todayStr()+'.pdf', 'Analytics Report');
     else exportSheetsToExcel(sheets, 'RMAS-POSM-Analytics-'+todayStr()+'.xlsx');
   } finally {
-    btn.disabled = false; btn.textContent = originalLabel;
+    btn.disabled = false; btn.innerHTML = originalLabel;
   }
 }
 
@@ -3433,7 +3728,7 @@ async function checkGeofence(whId){
 }
 function geoFailMessage(whId, r){
   const wh = whById(whId);
-  return `📍 You are outside the ${wh?wh.name:whId} warehouse area.\n\nYou are about ${fmtDist(r.dist)} away. Stock In / Stock Out for this warehouse is only allowed within ${r.geo.radius} m of it.\n(GPS accuracy: ±${r.here.acc} m)`;
+  return `You are outside the ${wh?wh.name:whId} warehouse area.\n\nYou are about ${fmtDist(r.dist)} away. Stock In / Stock Out for this warehouse is only allowed within ${r.geo.radius} m of it.\n(GPS accuracy: ±${r.here.acc} m)`;
 }
 // Called by performAction() for Stock In / Stock Out / Scan.
 async function attachGeoOrThrow(targetAction, payload){
@@ -3497,7 +3792,7 @@ function renderGeofence(){
   if(!geoAdmin.selected) geoAdmin.selected = (currentFilterWarehouse()!=='all' && currentFilterWarehouse()) || WAREHOUSES[0].id;
   document.getElementById('content').innerHTML = `
     <div id="geoShell">
-      <div class="notice">${icon('pin',16)}<div>Set each warehouse's location and allowed radius. Users can only do <b>Stock In</b>, <b>Stock Out</b> and <b>Scan</b> for a warehouse while their phone's GPS shows they are <b>inside its circle</b>. Warehouses without a location are not locked.</div></div>
+      <details class="howto"><summary>${icon('info',15)} How warehouse locations work<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('pin',16)}<div>Set each warehouse's location and allowed radius. Users can only do <b>Stock In</b>, <b>Stock Out</b> and <b>Scan</b> for a warehouse while their phone's GPS shows they are <b>inside its circle</b>. Warehouses without a location are not locked.</div></div></details>
       <div class="section-row cols-2" style="align-items:start;">
         <div class="panel" style="min-width:0;">
           <div class="panel-head"><div><h3 id="geoEditTitle">Warehouse</h3><div class="panel-sub">Click the map, drag the pin, paste coordinates, or use your current location</div></div></div>
@@ -3655,7 +3950,7 @@ const libPromises = {};
 
 /* ============================= PDF EXPORT =============================
    Built-in PDF writer (no extra library / no internet needed). Every
-   "⬇ Excel" button automatically gets a "⬇ PDF" twin that runs the same
+   "Excel" download button automatically gets a "PDF" twin that runs the same
    export but writes a PDF table instead. */
 let EXPORT_MODE = 'excel', exportModeTimer = null, pairQueued = false;
 function setExportModePdf(){ EXPORT_MODE = 'pdf'; clearTimeout(exportModeTimer); exportModeTimer = setTimeout(()=>{ EXPORT_MODE = 'excel'; }, 15000); }
@@ -3665,11 +3960,11 @@ function titleFromFilename(f){ return String(f||'Report').replace(/\.xlsx?$/i,''
 function pairPdfButtons(){
   document.querySelectorAll('button').forEach(b=>{
     if(b.dataset.pdfPaired) return;
-    if(!/^⬇\s*Excel$/.test(b.textContent.trim())) return;
+    if(!/^(⬇\s*)?Excel$/.test(b.textContent.trim())) return;
     b.dataset.pdfPaired = '1';
     b.addEventListener('click', e=>{ if(e.isTrusted) EXPORT_MODE = 'excel'; }, true);
     const pdfBtn = document.createElement('button');
-    pdfBtn.type = 'button'; pdfBtn.className = b.className; pdfBtn.textContent = '⬇ PDF'; pdfBtn.title = 'Download as PDF';
+    pdfBtn.type = 'button'; pdfBtn.className = b.className; pdfBtn.innerHTML = icon('download',13) + ' PDF'; pdfBtn.title = 'Download as PDF';
     pdfBtn.dataset.pdfPaired = '1';
     pdfBtn.addEventListener('click', ()=>{ setExportModePdf(); b.click(); });
     const wrap = document.createElement('span'); wrap.className = 'xl-pair';
@@ -3687,6 +3982,7 @@ function pdfClean(str){
     if((c>=32 && c<127) || (c>=160 && c<=255) || PDF_WINANSI[ch]) out += ch;
     else if(ch==='\n' || ch==='\t' || ch==='\r') out += ' ';
     else if(ch==='₱') out += 'PHP ';
+    else if(ch==='″') out += '"';
     else if(ch==='→') out += '->';
     else if(ch==='✓' || ch==='✅') out += 'OK';
     // anything else (emoji etc.) is dropped
@@ -3916,9 +4212,13 @@ function buildOnePageReport(){
   const forDel = DATA.requests.filter(r=>r.status==='for_delivery' && inWh(r)).length;
   const delivered7 = DATA.requests.filter(r=>r.status==='delivered' && r.dateDelivered && new Date(r.dateDelivered) >= new Date(Date.now()-7*86400000) && inWh(r)).length;
   const overdue = getOverdueRequests().filter(inWh).length;
-  const ioAll = DATA.transactions.filter(t=>(whFilter==='all'||t.warehouseId===whFilter) && matchesBUFilter(t.posmCode));
-  const in30 = ioAll.filter(t=>(t.type==='in'||t.type==='transfer_in') && new Date(t.date) >= new Date(Date.now()-30*86400000)).reduce((s,t)=>s+Number(t.qty),0);
-  const out30 = ioAll.filter(t=>(t.type==='out'||t.type==='transfer_out') && new Date(t.date) >= new Date(Date.now()-30*86400000)).reduce((s,t)=>s+Number(t.qty),0);
+  let in30, out30;
+  if(hasIo()){ const io = ioRows(whFilter); in30 = io.reduce((s,r)=>s+r.in30,0); out30 = io.reduce((s,r)=>s+r.out30,0); }
+  else {
+    const ioAll = DATA.transactions.filter(t=>(whFilter==='all'||t.warehouseId===whFilter) && matchesBUFilter(t.posmCode));
+    in30 = ioAll.filter(t=>(t.type==='in'||t.type==='transfer_in') && new Date(t.date) >= new Date(Date.now()-30*86400000)).reduce((s,t)=>s+Number(t.qty),0);
+    out30 = ioAll.filter(t=>(t.type==='out'||t.type==='transfer_out') && new Date(t.date) >= new Date(Date.now()-30*86400000)).reduce((s,t)=>s+Number(t.qty),0);
+  }
 
   const doc = new MiniPDF(true);
   let y = pdfHeader(doc, 'Inventory One-Page Report');
@@ -4048,7 +4348,7 @@ function openQrModal(code){
       <div class="field"><label>Copies</label><input type="number" id="qrCopies" min="1" max="200" value="1"></div>
       <div class="field"><label>Label size</label><select id="qrSize"><option value="sm">Small (48×28mm)</option><option value="md" selected>Medium (63×38mm)</option><option value="lg">Large (95×55mm)</option></select></div>
     </div>
-  `, `<button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" id="qrPrintBtn">🖨 Print Label</button>`);
+  `, `<button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" id="qrPrintBtn">${icon('printer',14)} Print Label</button>`);
   document.getElementById('qrPrintBtn').addEventListener('click', ()=>{
     const copies = document.getElementById('qrCopies').value, size = document.getElementById('qrSize').value;
     closeModal(); printLabels([p.code], copies, size);
@@ -4184,8 +4484,8 @@ function renderScan(){
         <div class="panel">
           <div class="panel-head"><div><h3>1. Transaction</h3><div class="panel-sub">Choose Stock In or Stock Out and the warehouse</div></div></div>
           <div class="seg" id="scanModeSeg" style="width:100%;margin-bottom:12px;">
-            <button data-mode="in" style="flex:1;">⬆ Stock In</button>
-            <button data-mode="out" style="flex:1;">⬇ Stock Out</button>
+            <button data-mode="in" style="flex:1;">${icon('arrowUp',13)} Stock In</button>
+            <button data-mode="out" style="flex:1;">${icon('arrowDown',13)} Stock Out</button>
           </div>
           <div style="display:flex;flex-direction:column;gap:12px;">
             <div class="field"><label>Warehouse</label><select id="scanWh"><option value="">— Select warehouse —</option>${whOptions(scanState.warehouseId)}</select></div>
@@ -4396,7 +4696,7 @@ function renderLabels(){
   const totalLabels = selCount * (parseInt(labelState.copies,10)||1);
   const perPage = {sm:36, md:21, lg:8}[labelState.size];
   const html = `
-    <div class="notice">${icon('barcode',16)}<div>Each label's barcode (Code 128) contains the <b>POSM code</b>. Print on A4 sticker paper (or plain paper + tape), stick it on the POSM box/shelf, then use <b>Scan Stock In/Out</b> with any phone.</div></div>
+    <details class="howto"><summary>${icon('info',15)} How to use barcode labels<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('barcode',16)}<div>Each label's barcode (Code 128) contains the <b>POSM code</b>. Print on A4 sticker paper (or plain paper + tape), stick it on the POSM box/shelf, then use <b>Scan Stock In/Out</b> with any phone.</div></div></details>
     <div class="section-row cols-2" style="align-items:start;">
       <div class="panel" style="min-width:0;">
         <div class="panel-head"><div><h3>Select POSM</h3><div class="panel-sub">${rows.length} match · <b>${selCount}</b> selected</div></div>
@@ -4418,7 +4718,7 @@ function renderLabels(){
           </div>
           <div class="field"><label>Copies per POSM</label><input type="number" id="lblCopies" min="1" max="200" value="${labelState.copies}"></div>
           <div class="field"><label>Preview</label><div class="lbl-preview" id="lblPreview"></div></div>
-          <button class="btn primary" id="lblPrint" style="justify-content:center;" ${selCount?'':'disabled'}>🖨 Print ${totalLabels.toLocaleString()} Label${totalLabels===1?'':'s'}</button>
+          <button class="btn primary" id="lblPrint" style="justify-content:center;" ${selCount?'':'disabled'}>${icon('printer',14)} Print ${totalLabels.toLocaleString()} Label${totalLabels===1?'':'s'}</button>
           <div class="cell-sub">Tip: in the print dialog set scale to <b>100%</b> / "Actual size" so the barcodes keep their size. "Save as PDF" also works.</div>
         </div>
       </div>
