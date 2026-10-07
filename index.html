@@ -199,6 +199,10 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .pbar{height:6px;border-radius:6px;background:var(--surface-alt);overflow:hidden;border:1px solid var(--line);} .pbar > div{height:100%;background:var(--primary);}
 .status-select{border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);border-radius:var(--radius-sm);padding:4px 6px;font-size:11.5px;}
+body.region-user .admin-only{display:none !important;}
+.kpi-click{cursor:pointer;transition:transform .12s, box-shadow .12s;}
+.kpi-click:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(21,80,230,.14);}
+.kpi-click:active{transform:translateY(0);}
 .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px;}
 .login-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:28px 26px;}
 .login-note{font-size:11.5px;color:var(--ink-faint);line-height:1.5;margin:10px 0 16px;}
@@ -466,13 +470,14 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
       <div class="brand-text"><strong>RMAS POSM</strong><span>Inventory Dashboard</span></div>
     </div>
     <div class="seg" id="loginRoleSeg" style="width:100%;margin-bottom:18px;">
-      <button data-role="user" class="active" style="flex:1;">User</button>
+      <button data-role="user" class="active" style="flex:1;">Region</button>
       <button data-role="admin" style="flex:1;">Admin</button>
     </div>
     <div id="loginUserPane">
-      <div class="field"><label>Your name</label><input type="text" id="loginUserName" list="tsDatalist" placeholder="e.g. Juan Dela Cruz"></div>
-      <p class="login-note">All your actions (stock in/out, requests, etc.) will go to <b>Pending Approval</b> by Admin first.</p>
-      <button class="btn primary" id="loginUserBtn" style="width:100%;justify-content:center;">Continue</button>
+      <div class="field"><label>Username (Region)</label><select id="loginRegionName"></select></div>
+      <div class="field"><label>Password</label><input type="password" id="loginRegionPassword" placeholder="••••••••"></div>
+      <p class="login-note">You will only see the warehouses, Trade Supervisors, stores and activity of your own region. Your actions (stock in/out, requests, etc.) go to <b>Pending Approval</b> by Admin first.</p>
+      <button class="btn primary" id="loginUserBtn" style="width:100%;justify-content:center;">Log in</button>
     </div>
     <div id="loginAdminPane" style="display:none;">
       <div class="field"><label>Admin Password</label><input type="password" id="loginAdminPassword" placeholder="••••••••"></div>
@@ -492,6 +497,8 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
     <div class="sidebar-footer">
       <button class="mini-btn" id="exportAnalyticsBtn" style="background:var(--primary-tint);color:var(--primary-ink);border-color:transparent;font-weight:600;">📊 Download Analytics Report (Excel)</button>
       <button class="mini-btn" id="changeAdminPwBtn" style="display:none;">🔒 Change Admin Password</button>
+      <button class="mini-btn" id="changeRegionPwBtn" style="display:none;">🔒 Change My Password</button>
+      <button class="mini-btn" id="regionAccountsBtn" style="display:none;">👥 Region Accounts</button>
       <button class="mini-btn" id="alertSettingsBtn" style="display:none;">🔔 Alert Settings</button>
       <button class="mini-btn" id="resetDataBtn" style="display:none;">🧹 Reset test data</button>
       <button class="mini-btn" id="exportDataBtn">Export raw data (JSON)</button>
@@ -587,11 +594,12 @@ const REAL_ITEMS = [].concat(...(window.POSM_DATA_PARTS||[]));
 if(!REAL_ITEMS.length) alert('Missing posm-data files. Make sure all posm-data-*.js files are uploaded in the same folder as this HTML.');
 const ORG_META = window.POSM_ORG_META || {};
 
-const BU_LABELS = {HA:'HA', AV:'AV', AC:'AC'};
+const BU_LABELS = {AV:'AV', HA:'HA', AC:'AC'};
+const BU_COLOR_KEYS = ['HA','AV','AC']; // fixed so each BU keeps its chart color
 const BU_PALETTE = ['#15239E','#7B3FE4','#0A87C4','#B4780F','#1B8A5A','#C43B3B','#0D1970','#8C4B2A'];
 function buLabel(bu){ return BU_LABELS[bu] || bu; }
 function buColor(bu){
-  const keys = Object.keys(BU_LABELS);
+  const keys = BU_COLOR_KEYS;
   let idx = keys.indexOf(bu);
   if(idx<0){ idx = Math.abs([...bu].reduce((s,c)=>s+c.charCodeAt(0),0)) % BU_PALETTE.length; }
   return BU_PALETTE[idx % BU_PALETTE.length];
@@ -599,8 +607,82 @@ function buColor(bu){
 const BU_ORDER = Object.keys(BU_LABELS);
 const BUS = [...new Set(REAL_ITEMS.map(i=>i.bu))].sort((a,b)=>{ const x=BU_ORDER.indexOf(a), y=BU_ORDER.indexOf(b); return (x<0?99:x)-(y<0?99:y); });
 
-const WAREHOUSES = Object.keys(ORG_META.warehouseRegion).map(name=>({id:name, dbId:slugId(name), name:name, region:ORG_META.warehouseRegion[name]}));
-const REGIONS = [...new Set(WAREHOUSES.map(w=>w.region))].sort();
+const ALL_WAREHOUSES = Object.keys(ORG_META.warehouseRegion).map(name=>({id:name, dbId:slugId(name), name:name, region:ORG_META.warehouseRegion[name]}));
+// WAREHOUSES = what the logged-in account can work with. Admin: all of them.
+// Region account: only the warehouses of that region (set in applyRegionScope).
+let WAREHOUSES = ALL_WAREHOUSES.slice();
+const REGION_ORDER = ['NGMA','SGMA','NORTH LUZON','SOUTH LUZON','CENTRAL LUZON','WEST VISAYAS','CENTRAL VISAYAS','SOUTH MINDANAO','NORTH MINDANAO'];
+function regionRank(r){ const i = REGION_ORDER.indexOf(String(r==null?'':r).trim().toUpperCase().replace(/\s+/g,' ')); return i<0 ? 99 : i; }
+function sortRegions(list){ return list.slice().sort((a,b)=> (regionRank(a)-regionRank(b)) || String(a).localeCompare(String(b))); }
+function sortWarehouses(list){ return list.slice().sort((a,b)=> (regionRank(a.region)-regionRank(b.region)) || a.name.localeCompare(b.name)); }
+const REGIONS = sortRegions([...new Set(ALL_WAREHOUSES.map(w=>w.region))]);
+
+/* ============================= REGION ACCOUNTS ============================= */
+const REGION_ACCOUNTS = ['NCR','NORTH LUZON','SOUTH LUZON','CENTRAL LUZON','VISAYAS','MINDANAO'];
+// Which data regions each account covers (NCR = NGMA + SGMA, etc.)
+const REGION_ACCOUNT_COVERS = {
+  'NCR': ['NCR','NGMA','SGMA'],
+  'NORTH LUZON': ['NORTH LUZON'],
+  'SOUTH LUZON': ['SOUTH LUZON'],
+  'CENTRAL LUZON': ['CENTRAL LUZON'],
+  'VISAYAS': ['VISAYAS','WEST VISAYAS','CENTRAL VISAYAS'],
+  'MINDANAO': ['MINDANAO','SOUTH MINDANAO','NORTH MINDANAO'],
+};
+function normRegion(r){ return String(r==null?'':r).trim().toUpperCase().replace(/\s+/g,' '); }
+function accountCovers(account, r){ return (REGION_ACCOUNT_COVERS[normRegion(account)]||[normRegion(account)]).includes(normRegion(r)); }
+function isRegionUser(){ return !!(session && session.role==='user' && session.region); }
+function sameRegion(r){ return isRegionUser() && accountCovers(session.region, r); }
+let DATA_ALL = null; // unfiltered server data (Admin sees this as DATA; region accounts get a filtered copy)
+// Which region the screens should show right now:
+//  - region account: always its own region(s)
+//  - admin: whatever is picked in the Region filter (null = all regions)
+function viewRegionMatcher(){
+  if(isRegionUser()) return r=>sameRegion(r);
+  const el = document.getElementById('globalRegionFilter');
+  const picked = el ? el.value : 'all';
+  if(!picked || picked==='all') return null;
+  return r=>normRegion(r)===normRegion(picked);
+}
+function applyRegionScope(){
+  const m = viewRegionMatcher();
+  WAREHOUSES = sortWarehouses(m ? ALL_WAREHOUSES.filter(w=>m(w.region)) : ALL_WAREHOUSES);
+}
+// Builds the filtered copy of the data every screen reads (DATA) from the full
+// server copy (DATA_ALL). Region + Business Unit filters are applied here once,
+// so the dashboard, metrics, movement, requests, history, disposal etc. all follow.
+function scopeData(d){
+  if(!d) return d;
+  const m = viewRegionMatcher();
+  const bu = (document.getElementById('globalBUFilter')||{}).value || 'all';
+  if(!m && bu==='all') return d;
+  const whIds = new Set(WAREHOUSES.map(w=>w.id));
+  const buCodes = bu==='all' ? null : new Set((d.posmMaster||[]).filter(p=>p.bu===bu).map(p=>p.code));
+  const okCode = c => !buCodes || buCodes.has(c);
+  const okWh = id => !m || whIds.has(id);
+  const tsList = m ? (d.tradeSupervisors||[]).filter(t=>m(t.region)) : (d.tradeSupervisors||[]);
+  const storeList = m ? (d.stores||[]).filter(s=>m(s.region)) : (d.stores||[]);
+  const orgIds = new Set(tsList.map(t=>t.id).concat(storeList.map(s=>s.id)));
+  return Object.assign({}, d, {
+    posmMaster: (d.posmMaster||[]).filter(p=>okCode(p.code)),
+    inventory: (d.inventory||[]).filter(r=>okWh(r.warehouseId) && okCode(r.posmCode)),
+    transactions: (d.transactions||[]).filter(t=>okWh(t.warehouseId) && okCode(t.posmCode)),
+    requests: (d.requests||[]).filter(r=>okWh(r.warehouseId) && okCode(r.posmCode)),
+    transfers: (d.transfers||[]).filter(t=>(okWh(t.fromWarehouseId) || okWh(t.toWarehouseId)) && okCode(t.posmCode)),
+    pendingActions: isRegionUser() ? (d.pendingActions||[]).filter(p=>p.submittedBy===session.name) : (d.pendingActions||[]),
+    tradeSupervisors: tsList,
+    stores: storeList,
+    orgChanges: !m ? (d.orgChanges||[]) : (d.orgChanges||[]).filter(o=>(isRegionUser() && o.performedBy===session.name) || orgIds.has(o.entityId)),
+  });
+}
+// Re-apply the current filters to the full data and redraw.
+function rebuildView(){
+  applyRegionScope();
+  if(USE_DB && DATA_ALL){ DATA = scopeData(DATA_ALL); syncOrgListsFromData(); renderDatalists(); }
+}
+// Expired/obsolete POSM only count (for disposal) when there is still stock of it.
+function disposalRelevant(p, whId){
+  return totalQtyForPosm(p.code, whId||'all') > 0;
+}
 
 /* ============================= APPS SCRIPT CONFIG =============================
    Paste your deployed Google Apps Script Web App URL below (it looks like
@@ -724,7 +806,7 @@ function buildInitialData(){
   const posmMaster = REAL_ITEMS.map(i => ({code:i.code, desc:i.description || i.popType, type:i.popType, bu:i.bu, status:'active', image:i.image || null}));
   const inventory = [];
   REAL_ITEMS.forEach(item=>{
-    WAREHOUSES.forEach(wh=>{
+    ALL_WAREHOUSES.forEach(wh=>{
       const qty = Number(item.stock[wh.id] || 0);
       inventory.push({warehouseId:wh.id, posmCode:item.code, beginningStock:qty, qty:qty});
     });
@@ -779,6 +861,7 @@ function setSyncStatus(state, done, total){
     seeding: ['var(--warning)', `Seeding Google Sheet... ${done||0}/${total||0}`],
     live: ['var(--success)', 'Connected • Google Sheets'],
     refreshing: ['var(--warning)', 'Refreshing...'],
+    cached: ['var(--warning)', 'Showing saved data • updating...'],
     local: ['var(--ink-faint)', 'Local only (this device)'],
     error: ['var(--danger)', 'Backend unavailable'],
   };
@@ -812,34 +895,41 @@ async function postAction(action, payload){
   return json;
 }
 
+const DATA_CACHE_KEY = 'rmas_posm_data_cache_v1';
+function saveDataCache(d){
+  try{
+    // Images are loaded separately, so leave them out to keep the cache small.
+    const slim = Object.assign({}, d, {posmMaster:(d.posmMaster||[]).map(p=>{ const c = Object.assign({}, p); delete c.image; return c; })});
+    localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({at: Date.now(), data: slim, alerts: ALERTS, alertsFor: alertsOwner()}));
+  }catch(e){ /* storage full or blocked — the app still works, just without the instant start */ }
+}
+function alertsOwner(){ return session ? (session.region || session.role) : ''; }
+function loadDataCache(){
+  try{ const raw = localStorage.getItem(DATA_CACHE_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
 let ALERTS = null; // cached alert snapshot: pending approvals, overdue/due-soon deliveries, low-stock reorder items
 async function loadFromServer(silent){
   if(!silent) setSyncStatus('refreshing');
   const res = await fetch(APPS_SCRIPT_URL + '?action=getData&t=' + Date.now(), {redirect:'follow'});
   const data = await res.json();
   if(data.error) throw new Error(data.error);
-  DATA = data;
+  DATA_ALL = data;
+  saveDataCache(data);
+  applyRegionScope();
+  DATA = scopeData(data);
   syncOrgListsFromData();
   renderDatalists();
   if(!silent) setSyncStatus('live');
   // Alerts are fetched alongside the main data (not on every action) so this
   // never adds latency to a save — only to the initial load and the 45s
   // auto-refresh cycle. A failure here shouldn't block the rest of the app.
-  fetch(APPS_SCRIPT_URL + '?action=getAlerts&t=' + Date.now(), {redirect:'follow'})
-    .then(r=>r.json()).then(a=>{ if(!a.error){ ALERTS = a; if(currentSection==='dashboard') renderDashboard(); } })
+  fetch(APPS_SCRIPT_URL + '?action=getAlerts' + (isRegionUser() ? '&region='+encodeURIComponent(session.region) : '') + '&t=' + Date.now(), {redirect:'follow'})
+    .then(r=>r.json()).then(a=>{ if(!a.error){ ALERTS = a; saveDataCache(DATA_ALL); if(currentSection==='dashboard') renderDashboard(); } })
     .catch(()=>{});
   scheduleRender();
 }
 
 /* ============================= SESSION / LOGIN ============================= */
-// ===== TEMPORARY TEST SWITCH =====
-// true  = walang login screen, diretso Admin
-// false = normal (may password ulit)
-const DISABLE_LOGIN_FOR_TESTING = true;
-// Kung kailangan mag-save/approve sa Google Sheets habang naka-test mode,
-// ilagay dito ang admin password (backend still checks it). Pwede iwanang blank.
-const TEST_ADMIN_PASSWORD = '';
-// =================================
 const SESSION_KEY = 'rmas_posm_session_v1';
 let session = null; // {role:'admin'|'user', name, password (admin only, kept for re-auth on each action)}
 
@@ -871,12 +961,27 @@ function wireLoginScreen(){
     document.getElementById('loginUserPane').style.display = b.dataset.role==='user' ? '' : 'none';
     document.getElementById('loginAdminPane').style.display = b.dataset.role==='admin' ? '' : 'none';
   }));
+  const regionSelLogin = document.getElementById('loginRegionName');
+  regionSelLogin.innerHTML = `<option value="">— Select your region —</option>` + REGION_ACCOUNTS.map(r=>`<option value="${r}">${r}</option>`).join('');
+  document.getElementById('loginRegionPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginUserBtn').click(); });
+  document.getElementById('loginAdminPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginAdminBtn').click(); });
   document.getElementById('loginUserBtn').addEventListener('click', async ()=>{
-    const name = document.getElementById('loginUserName').value.trim();
-    if(!name){ loginError('Enter your name.'); return; }
-    session = {role:'user', name, password:null};
-    saveSession(session);
-    await proceedAfterLogin();
+    const btn = document.getElementById('loginUserBtn');
+    const region = regionSelLogin.value;
+    const password = document.getElementById('loginRegionPassword').value;
+    if(!region){ loginError('Select your region.'); return; }
+    if(!password){ loginError('Enter your password.'); return; }
+    btn.disabled = true; btn.textContent = 'Checking...';
+    try{
+      await postAction('regionLogin', {region, password});
+      session = {role:'user', region, name:region, password};
+      saveSession(session);
+      await proceedAfterLogin();
+    }catch(e){
+      loginError(e.message || 'Wrong password.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Log in';
+    }
   });
   document.getElementById('loginAdminBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('loginAdminBtn');
@@ -922,6 +1027,71 @@ document.getElementById('changeAdminPwBtn') && document.getElementById('changeAd
       alert(e.message || 'Could not update the password.');
       btn.disabled = false; btn.textContent = 'Change Password';
     }
+  });
+});
+document.getElementById('changeRegionPwBtn') && document.getElementById('changeRegionPwBtn').addEventListener('click', ()=>{
+  if(!isRegionUser()) return;
+  openModal('Change Password — '+session.region, `
+    <div class="field"><label>Current Password</label><input type="password" id="crpOld"></div>
+    <div class="field"><label>New Password</label><input type="password" id="crpNew"></div>
+    <div class="field"><label>Confirm New Password</label><input type="password" id="crpNew2"></div>
+    <p class="login-note">This changes the password for the whole <b>${escHtml(session.region)}</b> account. Everyone using it must log in with the new password.</p>
+  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="crpSubmit">Change Password</button>`);
+  document.getElementById('crpSubmit').addEventListener('click', async ()=>{
+    const btn = document.getElementById('crpSubmit');
+    const oldPassword = document.getElementById('crpOld').value;
+    const newPassword = document.getElementById('crpNew').value;
+    const newPassword2 = document.getElementById('crpNew2').value;
+    if(!oldPassword || !newPassword){ alert('Fill in all fields.'); return; }
+    if(newPassword.length < 4){ alert('New password must be at least 4 characters.'); return; }
+    if(newPassword !== newPassword2){ alert('New passwords do not match.'); return; }
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try{
+      await postAction('changeRegionPassword', {region: session.region, oldPassword, newPassword});
+      session.password = newPassword; saveSession(session);
+      closeModal(); alert('Password updated.');
+    }catch(e){
+      alert(e.message || 'Could not update the password.');
+      btn.disabled = false; btn.textContent = 'Change Password';
+    }
+  });
+});
+document.getElementById('regionAccountsBtn') && document.getElementById('regionAccountsBtn').addEventListener('click', async ()=>{
+  if(!session || session.role!=='admin') return;
+  const trig = document.getElementById('regionAccountsBtn');
+  const orig = trig.textContent; trig.disabled = true; trig.textContent = 'Loading...';
+  let cur = {regionEmails:{}};
+  try{ cur = await postAction('getRegionAccounts', {adminPassword: session.password}); }catch(e){ alert(e.message||'Could not load region accounts.'); }
+  trig.disabled = false; trig.textContent = orig;
+  const emails = cur.regionEmails || {};
+  openModal('Region Accounts', `
+    <p class="login-note" style="margin-top:0;">Each region logs in with its own username and password. New accounts start with the default password <b>${escHtml(cur.defaultPassword||'')}</b> — they can change it from the sidebar (🔒 Change My Password). Region alert emails only receive alerts for their own region.</p>
+    ${REGION_ACCOUNTS.map(r=>{
+      const whs = ALL_WAREHOUSES.filter(w=>accountCovers(r, w.region)).length;
+      return `<div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+          <b>${r}</b><span class="cell-sub">${whs} warehouse(s)${(cur.changed||{})[r] ? ' · own password set' : ' · default password'}</span>
+        </div>
+        <div class="field" style="margin-bottom:6px;"><label>Alert emails for ${r} (comma-separated)</label><input type="text" data-region-email="${r}" value="${escHtml(emails[r]||'')}" placeholder="e.g. rmas.south@company.com"></div>
+        <button class="btn sm" data-reset-region="${r}">Reset password to default</button>
+      </div>`;
+    }).join('')}
+  `, `<button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" id="raSave">Save Emails</button>`, true);
+  document.querySelectorAll('[data-reset-region]').forEach(b=>b.addEventListener('click', async ()=>{
+    const r = b.dataset.resetRegion;
+    if(!confirm('Reset the '+r+' password back to the default?')) return;
+    b.disabled = true;
+    try{ await postAction('resetRegionPassword', {adminPassword: session.password, region: r}); alert(r+' password reset to default.'); }
+    catch(e){ alert(e.message||'Reset failed.'); }
+    b.disabled = false;
+  }));
+  document.getElementById('raSave').addEventListener('click', async ()=>{
+    const btn = document.getElementById('raSave');
+    const regionEmails = {};
+    document.querySelectorAll('[data-region-email]').forEach(i=>{ regionEmails[i.dataset.regionEmail] = i.value.trim(); });
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try{ await postAction('saveRegionEmails', {adminPassword: session.password, regionEmails}); alert('Region alert emails saved.'); closeModal(); }
+    catch(e){ alert(e.message||'Could not save.'); btn.disabled = false; btn.textContent = 'Save Emails'; }
   });
 });
 document.getElementById('alertSettingsBtn') && document.getElementById('alertSettingsBtn').addEventListener('click', async ()=>{
@@ -984,6 +1154,9 @@ document.getElementById('alertSettingsBtn') && document.getElementById('alertSet
       lines.push(res.email ? '✅ Email sent' : (res.emailError ? '❌ Email failed: '+res.emailError : '— Email not configured'));
       lines.push(res.telegram ? '✅ Telegram sent' : (res.telegramError ? '❌ Telegram failed' : '— Telegram not configured'));
       lines.push(res.viber ? '✅ Viber sent' : (res.viberError ? '❌ Viber failed' : '— Viber not configured'));
+      const rr = res.regions || {};
+      if(Object.keys(rr).length) lines.push('Region emails: ' + Object.keys(rr).map(k=>k+' — '+rr[k]).join(' · '));
+      else lines.push('— No region emails set (👥 Region Accounts)');
       document.getElementById('asTestResult').innerHTML = `<div class="notice">${icon('check',15)}<div>Settings saved. ${lines.join('<br>')}</div></div>`;
     }catch(e){
       document.getElementById('asTestResult').innerHTML = `<div class="notice" style="background:var(--danger-bg);color:var(--danger);">${icon('alert',15)}<div>${e.message||'Test send failed.'}</div></div>`;
@@ -1013,23 +1186,36 @@ async function initApp(){
   }
 
   USE_DB = true;
-
-  // ===== TEMPORARY: login disabled for testing =====
-  // Set to false to bring back the login screen.
-  if(DISABLE_LOGIN_FOR_TESTING){
-    session = {role:'admin', name:'Admin (Test)', password: TEST_ADMIN_PASSWORD};
-    await proceedAfterLogin();
-    return;
-  }
-  // =================================================
-
   session = loadSession();
+  // Old name-only "User" sessions are no longer valid — those people now log in with a region account.
+  if(session && session.role==='user' && !session.region){ clearSession(); session = null; }
   if(!session){ showLoginScreen(); return; }
+  if(isRegionUser()){
+    // Checked in the background so the saved data shows instantly.
+    postAction('regionLogin', {region: session.region, password: session.password}).catch(e=>{
+      // Password was changed/reset elsewhere — ask to log in again.
+      if(!/fetch|network|Failed/i.test(e.message||'')){ clearSession(); alert('Please log in again: '+(e.message||'')); location.reload(); }
+    });
+  }
   await proceedAfterLogin();
 }
 
 async function proceedAfterLogin(){
+  applyRegionScope();
+  document.body.classList.toggle('region-user', isRegionUser());
+  if(isRegionUser() && !WAREHOUSES.length){
+    alert('No warehouse is mapped to region "'+session.region+'" yet. Ask Admin to check the warehouse region names.');
+  }
   showApp();
+  const crpBtn = document.getElementById('changeRegionPwBtn');
+  if(crpBtn) crpBtn.style.display = isRegionUser() ? '' : 'none';
+  const raBtn = document.getElementById('regionAccountsBtn');
+  if(raBtn) raBtn.style.display = (session.role==='admin') ? '' : 'none';
+  if(USE_DB && session.role==='admin' && session.password){
+    // Lets the server check that region accounts only touch their own warehouses.
+    const warehouseRegions = {}; ALL_WAREHOUSES.forEach(w=>{ warehouseRegions[w.id] = w.region; });
+    postAction('saveWarehouseRegions', {adminPassword: session.password, warehouseRegions}).catch(e=>console.warn('warehouse region sync failed', e));
+  }
   const capBtn = document.getElementById('changeAdminPwBtn');
   if(capBtn) capBtn.style.display = (session.role==='admin') ? '' : 'none';
   const alertSettingsBtn = document.getElementById('alertSettingsBtn');
@@ -1038,6 +1224,19 @@ async function proceedAfterLogin(){
   if(resetBtn) resetBtn.style.display = (session.role==='admin') ? '' : 'none';
   renderWarehouseFilter(); renderDatalists();
   setSyncStatus('connecting');
+  // Instant start: draw the last saved copy right away while the database loads.
+  const cached = loadDataCache();
+  // Let the rest of the page script finish loading first (render helpers are defined further down).
+  await new Promise(r=>setTimeout(r,0));
+  if(cached && cached.data && !DATA_ALL){
+    DATA_ALL = cached.data;
+    if(cached.alerts && cached.alertsFor===alertsOwner()) ALERTS = cached.alerts;
+    rebuildView();
+    setSyncStatus('cached');
+    try{ renderAll(); }catch(e){ console.warn('cached render failed', e); }
+  } else if(!DATA){
+    document.getElementById('content').innerHTML = `<div class="empty-state" style="padding:60px 20px;"><div class="sync-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--warning);margin-right:8px;"></div>Loading inventory data from Google Sheets... (first open on this device only — next time it opens instantly)</div>`;
+  }
   try{
     const check = await fetch(APPS_SCRIPT_URL+'?action=checkSeeded&t='+Date.now(), {redirect:'follow'}).then(r=>r.json());
     if(!check.seeded || !check.orgSeeded){
@@ -1046,7 +1245,7 @@ async function proceedAfterLogin(){
       // still be false — this same call backfills just that part, since the
       // backend tracks the two seeding steps on separate flags.
       setSyncStatus('seeding', 0, REAL_ITEMS.length);
-      await postAction('seed', {posmItems: REAL_ITEMS, warehouses: WAREHOUSES, tsList: ORG_META.tsList, storeList: ORG_META.storeList});
+      await postAction('seed', {posmItems: REAL_ITEMS, warehouses: ALL_WAREHOUSES, tsList: ORG_META.tsList, storeList: ORG_META.storeList});
     }
     await loadFromServer(true);
     setSyncStatus('live');
@@ -1202,8 +1401,12 @@ function startAutoRefresh(){
 
 /* ---- Generic action performer: applies directly if Admin, else routes
    through the pending-approval queue if a regular User ---- */
+const ADMIN_ONLY_ACTIONS = ['newPosm','changeStatus','newTS','editTS','deleteTS','newStore','editStore','deleteStore'];
 async function performAction(targetAction, payload, opts){
   opts = opts || {};
+  if(isRegionUser() && (ADMIN_ONLY_ACTIONS.includes(targetAction) || (payload && payload.isNew))){
+    throw new Error('Only Admin can add or remove POSM, Trade Supervisors and Stores. Region accounts can stock in/out quantity only.');
+  }
   payload = await attachGeoOrThrow(targetAction, payload);
   const withAttribution = Object.assign({performedBy: session.name, createdBy: session.name}, payload);
   if(session.role === 'admin'){
@@ -1211,10 +1414,12 @@ async function performAction(targetAction, payload, opts){
     if(!opts.silent){
       const patched = applyLocalUpdate(targetAction, withAttribution, result);
       if(patched) renderAll(); else await loadFromServer(true);
+      // When a filter is on, the screen works on a filtered copy — pull a fresh full copy in the background.
+      if(patched && DATA_ALL && DATA!==DATA_ALL) loadFromServer(true).catch(()=>{});
     }
     return {applied:true};
   } else {
-    const subResult = await postAction('submitPending', {targetAction, payload: withAttribution, submittedBy: session.name});
+    const subResult = await postAction('submitPending', {targetAction, payload: withAttribution, submittedBy: session.name, region: session.region, regionPassword: session.password});
     if(!opts.silent){
       DATA.pendingActions = DATA.pendingActions || [];
       DATA.pendingActions.unshift({id: subResult.id, action: targetAction, payload: JSON.stringify(withAttribution), submittedBy: session.name, submittedAt: new Date().toISOString(), status:'pending', reviewedBy:'', reviewedAt:'', rejectReason:''});
@@ -1243,7 +1448,7 @@ function scheduleRender(){
 
 /* ============================= DERIVED HELPERS ============================= */
 function posmByCode(code){ return DATA.posmMaster.find(p=>p.code===code); }
-function whById(id){ return WAREHOUSES.find(w=>w.id===id); }
+function whById(id){ return ALL_WAREHOUSES.find(w=>w.id===id); }
 let dashboardActivityFilter = 'all';
 function buildActivityFeed(){
   const items = [];
@@ -1350,7 +1555,7 @@ function findStoreEntry(storeName){ return storeRowsArray().find(s=>s.store===st
 
 /* ============================= NAV ============================= */
 const SECTIONS = [
-  {key:'dashboard', label:'Dashboard', icon:'dashboard', sub:'Overview of the full POSM inventory'},
+  {key:'dashboard', label:'Dashboard', icon:'dashboard', sub:'Overview of the POSM inventory'},
   {key:'inventory', label:'Full Inventory', icon:'inventory', sub:'Current stock per warehouse, including items due for disposal', group:'Inventory'},
   {key:'stockflow', label:'Stock In / Out', icon:'stock', sub:'Log of incoming and outgoing POSM', group:'Inventory'},
   {key:'scan', label:'Scan Stock In/Out', icon:'scan', sub:'Scan POSM barcode labels with your phone camera', group:'Inventory'},
@@ -1363,7 +1568,7 @@ const SECTIONS = [
   {key:'beginning', label:'Beginning Stock', icon:'beginning', sub:'Overall and per-warehouse baseline stock', group:'Insights'},
   {key:'movement', label:'Movement Analysis', icon:'movement', sub:'Fast moving, low moving, and non-moving POSM', group:'Insights'},
   {key:'geofence', label:'Warehouse Locations', icon:'pin', sub:'Lock Stock In / Out to a map radius around each warehouse', adminOnly:true, group:'Admin'},
-  {key:'orgmanage', label:'Trade Supervisors & Stores', icon:'org', sub:'Add, rename, reassign, or remove Trade Supervisors and Stores', group:'Admin'},
+  {key:'orgmanage', label:'Trade Supervisors & Stores', icon:'org', sub:'Add, rename, reassign, or remove Trade Supervisors and Stores', regionSub:'Trade Supervisors and Stores of your region (only Admin can add, edit or remove)', group:'Admin'},
 ];
 let currentSection = 'dashboard';
 let charts = {};
@@ -1381,7 +1586,7 @@ function renderNav(){
   if(!DATA) return;
   const nav = document.getElementById('nav');
   const pendingReq = DATA.requests.filter(r=>r.status==='for_sorting'||r.status==='for_delivery').length;
-  const disposeCount = DATA.posmMaster.filter(p=>p.status==='expired'||p.status==='obsolete').length;
+  const disposeCount = DATA.posmMaster.filter(p=>(p.status==='expired'||p.status==='obsolete') && disposalRelevant(p, currentFilterWarehouse())).length;
   const pendingApprovalCount = (DATA.pendingActions||[]).filter(p=>p.status==='pending').length;
   const mySubsOpenCount = (DATA.pendingActions||[]).filter(p=>p.status==='pending' && session && p.submittedBy===session.name).length;
   const rejectedCount = DATA.requests.filter(r=>r.status==='rejected').length + DATA.transfers.filter(t=>t.status==='rejected').length + rejectedSubmissions().length;
@@ -1403,7 +1608,7 @@ function renderNav(){
   });
   const pill = document.getElementById('sessionPill');
   if(pill && session){
-    pill.innerHTML = `Logged in as<br><b>${session.name}</b><span class="role-badge ${session.role}">${session.role==='admin'?'Admin':'User'}</span>`;
+    pill.innerHTML = `Logged in as<br><b>${session.name}</b><span class="role-badge ${session.role}">${session.role==='admin'?'Admin':(session.region?'Region':'User')}</span>`;
   }
 }
 /* ============================= NOTIFICATION BELL ============================= */
@@ -1467,8 +1672,15 @@ function renderWarehouseFilter(){
   const whSel = document.getElementById('globalWarehouseFilter');
   const buSel = document.getElementById('globalBUFilter');
   const prevRegion = regionSel.value || 'all';
-  regionSel.innerHTML = `<option value="all">All Regions</option>` + REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('');
-  regionSel.value = REGIONS.includes(prevRegion) ? prevRegion : 'all';
+  if(isRegionUser()){
+    // Region accounts never see the Region filter.
+    regionSel.innerHTML = `<option value="all">${session.region}</option>`;
+    regionSel.value = 'all'; regionSel.style.display = 'none';
+  } else {
+    regionSel.style.display = '';
+    regionSel.innerHTML = `<option value="all">All Regions</option>` + REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('');
+    regionSel.value = REGIONS.includes(prevRegion) ? prevRegion : 'all';
+  }
 
   if(buSel && !buSel.dataset.populated){
     const prevBU = buSel.value || 'all';
@@ -1477,21 +1689,17 @@ function renderWarehouseFilter(){
     buSel.dataset.populated = '1';
   }
 
-  const region = regionSel.value;
+  // Warehouse list = only the warehouses of the picked region (or the account's region), no region headings.
+  applyRegionScope();
   const prevWh = whSel.value || 'all';
-  let html = `<option value="all">All Warehouses</option>`;
-  if(region==='all'){
-    const byRegion = {};
-    WAREHOUSES.forEach(w=>{ (byRegion[w.region] = byRegion[w.region]||[]).push(w); });
-    Object.keys(byRegion).sort().forEach(r=>{
-      html += `<optgroup label="${r}">` + byRegion[r].map(w=>`<option value="${w.id}">${w.name}</option>`).join('') + `</optgroup>`;
-    });
-  } else {
-    html += WAREHOUSES.filter(w=>w.region===region).map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
-  }
+  const whs = WAREHOUSES;
+  const regionPicked = !isRegionUser() && regionSel.value!=='all';
+  let html = `<option value="all">${isRegionUser() ? 'All My Warehouses' : (regionPicked ? 'All '+regionSel.value+' Warehouses' : 'All Warehouses')}</option>`;
+  html += whs.map(w=>`<option value="${w.id}">${w.name}</option>`).join('');
   whSel.innerHTML = html;
-  const whs = region==='all' ? WAREHOUSES : WAREHOUSES.filter(w=>w.region===region);
   whSel.value = (prevWh==='all' || whs.some(w=>w.id===prevWh)) ? prevWh : 'all';
+  // Region account with only one warehouse: no warehouse filter needed at all.
+  whSel.style.display = (isRegionUser() && whs.length<=1) ? 'none' : '';
 }
 function renderDatalists(){
   const storeDl = document.getElementById('storeDatalist');
@@ -1514,11 +1722,11 @@ function closeModal(){ document.getElementById('modalRoot').innerHTML=''; docume
 function posmOptions(selected){
   return DATA.posmMaster.map(p=>`<option value="${p.code}" ${p.code===selected?'selected':''}>${p.code} — ${p.desc}</option>`).join('');
 }
-function whOptions(selected){
+function whOptions(selected, includeAll){
   const byRegion = {};
-  WAREHOUSES.forEach(w=>{ (byRegion[w.region] = byRegion[w.region]||[]).push(w); });
+  sortWarehouses((includeAll || !isRegionUser()) ? ALL_WAREHOUSES : WAREHOUSES).forEach(w=>{ (byRegion[w.region] = byRegion[w.region]||[]).push(w); });
   let html='';
-  Object.keys(byRegion).sort().forEach(region=>{
+  sortRegions(Object.keys(byRegion)).forEach(region=>{
     html += `<optgroup label="${region}">` + byRegion[region].map(w=>`<option value="${w.id}" ${w.id===selected?'selected':''}>${w.name}</option>`).join('') + `</optgroup>`;
   });
   return html;
@@ -1568,7 +1776,7 @@ function openStockInModal(){
   let newPosmImgDataUrl = null;
   openModal('Stock In — New POSM Arrival', `
     <div class="notice" style="margin:0;">${icon('alert',15)}<div>You need to upload a photo of the <b>delivery receipt</b> as proof before the new stock in can be saved.</div></div>
-    <div class="field"><label><input type="checkbox" id="siNewPosm" style="width:auto;margin-right:6px;">New POSM (not yet in the list)</label></div>
+    <div class="field admin-only"><label><input type="checkbox" id="siNewPosm" style="width:auto;margin-right:6px;">New POSM (not yet in the list)</label></div>
     <div id="siExistingWrap" class="field"><label>POSM</label><select id="siPosm">${posmOptions()}</select></div>
     <div id="siNewWrap" style="display:none;">
       <div class="field"><label>New POSM Code</label><input type="text" id="siNewCode" placeholder="e.g. AC00071"></div>
@@ -1774,7 +1982,7 @@ function openNewTransferModal(){
     <div class="field"><label>POSM</label><select id="trPosm">${posmOptions()}</select></div>
     <div class="two-col">
       <div class="field"><label>From Warehouse</label><select id="trFrom">${whOptions()}</select></div>
-      <div class="field"><label>To Warehouse</label><select id="trTo">${whOptions(WAREHOUSES[1].id)}</select></div>
+      <div class="field"><label>To Warehouse</label><select id="trTo">${whOptions((ALL_WAREHOUSES.find(w=>!WAREHOUSES[0] || w.id!==WAREHOUSES[0].id)||{}).id, true)}</select></div>
     </div>
     <div class="field"><label>Quantity</label><input type="number" id="trQty" min="1" value="10"></div>
   `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="trSubmit">${actionLabel('Create Transfer')}</button>`);
@@ -1861,8 +2069,13 @@ function renderAlertPanel(){
   if(!ALERTS) return '';
   const items = [];
   if(ALERTS.pendingCount && session && session.role==='admin') items.push({icon:'clock', color:'warning', label:`${ALERTS.pendingCount} action(s) awaiting approval`, nav:'pending'});
-  if(ALERTS.overdueCount) items.push({icon:'alert', color:'danger', label:`${ALERTS.overdueCount} delivery(ies) OVERDUE`, nav:'metrics'});
-  if(ALERTS.dueSoonCount) items.push({icon:'clock', color:'warning', label:`${ALERTS.dueSoonCount} delivery(ies) due within 3 days`, nav:'metrics'});
+  // When a Region/BU filter is on, count only the deliveries that belong to it.
+  const scoped = DATA_ALL && DATA!==DATA_ALL;
+  const reqIds = scoped ? new Set(DATA.requests.map(r=>r.id)) : null;
+  const overdueN = scoped && ALERTS.overdueItems ? ALERTS.overdueItems.filter(r=>reqIds.has(r.id)).length : ALERTS.overdueCount;
+  const dueSoonN = scoped && ALERTS.dueSoonItems ? ALERTS.dueSoonItems.filter(r=>reqIds.has(r.id)).length : ALERTS.dueSoonCount;
+  if(overdueN) items.push({icon:'alert', color:'danger', label:`${overdueN} delivery(ies) OVERDUE`, nav:'metrics'});
+  if(dueSoonN) items.push({icon:'clock', color:'warning', label:`${dueSoonN} delivery(ies) due within 3 days`, nav:'metrics'});
   if(ALERTS.lowStockCount) items.push({icon:'box', color:'danger', label:`${ALERTS.lowStockCount} POSM item(s) at or below ${ALERTS.lowStockThreshold} units — consider reordering`, nav:'inventory'});
   if(!items.length){
     return `<div class="notice" style="background:var(--success-bg);border-color:color-mix(in srgb, var(--success) 30%, transparent);color:var(--success);">${icon('check',16)}<div><b>All clear</b> — no pending approvals, overdue deliveries, or low-stock items right now.</div></div>`;
@@ -1883,11 +2096,9 @@ function renderDashboard(){
   const invRows = DATA.inventory.filter(r=> (whFilter==='all' || r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
   const totalStock = invRows.reduce((s,r)=>s+r.qty,0);
   const totalBeginning = invRows.reduce((s,r)=>s+r.beginningStock,0);
-  const disposeItems = DATA.posmMaster.filter(p=>(p.status==='expired'||p.status==='obsolete') && (buFilter==='all'||p.bu===buFilter));
-  // Always totals across ALL warehouses, regardless of the Warehouse filter —
-  // matches disposeItems.length (also warehouse-agnostic), so the two
-  // numbers on this card never contradict each other.
-  const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && (p.status==='expired'||p.status==='obsolete') && (buFilter==='all'||p.bu===buFilter);}).reduce((s,r)=>s+r.qty,0);
+  // Only expired/obsolete POSM that still have stock (zero-qty ones are left out).
+  const disposeItems = DATA.posmMaster.filter(p=>(p.status==='expired'||p.status==='obsolete') && disposalRelevant(p, whFilter) && (buFilter==='all'||p.bu===buFilter));
+  const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && (p.status==='expired'||p.status==='obsolete') && (whFilter==='all'||r.warehouseId===whFilter) && (buFilter==='all'||p.bu===buFilter);}).reduce((s,r)=>s+r.qty,0);
   const pendingReq = DATA.requests.filter(r=>(r.status==='for_sorting'||r.status==='for_delivery') && (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
   const deliveredThisWeek = DATA.requests.filter(r=>r.status==='delivered' && r.dateDelivered && new Date(r.dateDelivered) >= new Date(Date.now()-7*86400000) && (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
   const deltaVsBeginning = totalBeginning ? ((totalStock-totalBeginning)/totalBeginning*100) : 0;
@@ -1896,13 +2107,13 @@ function renderDashboard(){
     ${renderAlertPanel()}
     <div class="notice">${icon('check',16)}<div><b>Real POSM master data</b> from the Import Center (${DATA.posmMaster.length} POSM types, ${WAREHOUSES.length} warehouses). The beginning stock here is the current POSM count from when the data was loaded — In/Out, Requests, and Transfers tracking starts from that point.</div></div>
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Total POSM Stock</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('inventory',16)}</div></div>
+      <div class="kpi-card kpi-click" data-kpi-go="stock" title="Open inventory"><div class="kpi-top"><span class="kpi-label">Total POSM Stock</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('inventory',16)}</div></div>
         <div class="kpi-value">${totalStock.toLocaleString()}</div><div class="kpi-delta ${deltaVsBeginning>=0?'up':'down'}">${deltaVsBeginning>=0?'+':''}${deltaVsBeginning.toFixed(1)}% vs beginning stock</div></div>
-      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">For Disposal</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('trash',16)}</div></div>
+      <div class="kpi-card kpi-click" data-kpi-go="disposal" title="Open items for disposal"><div class="kpi-top"><span class="kpi-label">For Disposal</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('trash',16)}</div></div>
         <div class="kpi-value">${disposeQty.toLocaleString()}</div><div class="kpi-delta down">${disposeItems.length} POSM type/s marked expired/obsolete</div></div>
-      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Pending Requests</span><div class="kpi-icon" style="background:var(--warning-bg);color:var(--warning)">${icon('requests',16)}</div></div>
+      <div class="kpi-card kpi-click" data-kpi-go="pendingreq" title="Open requests"><div class="kpi-top"><span class="kpi-label">Pending Requests</span><div class="kpi-icon" style="background:var(--warning-bg);color:var(--warning)">${icon('requests',16)}</div></div>
         <div class="kpi-value">${pendingReq.length}</div><div class="kpi-delta flat">For Sorting + For Delivery</div></div>
-      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Delivered (7 days)</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('check',16)}</div></div>
+      <div class="kpi-card kpi-click" data-kpi-go="delivered" title="Open delivery metrics"><div class="kpi-top"><span class="kpi-label">Delivered (7 days)</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('check',16)}</div></div>
         <div class="kpi-value">${deliveredThisWeek.length}</div><div class="kpi-delta up">Completed deliveries this week</div></div>
     </div>
     <div class="section-row cols-2">
@@ -1938,6 +2149,14 @@ function renderDashboard(){
     renderActivityFeed();
   }));
   document.querySelectorAll('[data-nav-to]').forEach(b=>b.addEventListener('click',()=>{currentSection=b.dataset.navTo; renderAll();}));
+  document.querySelectorAll('[data-kpi-go]').forEach(card=>card.addEventListener('click',()=>{
+    const go = card.dataset.kpiGo;
+    if(go==='stock'){ invFilters.status='all'; invScope='mine'; currentSection='inventory'; }
+    else if(go==='disposal'){ invFilters.status='disposal'; invScope='mine'; currentSection='inventory'; }
+    else if(go==='pendingreq'){ currentSection='requests'; }
+    else if(go==='delivered'){ currentSection='metrics'; }
+    renderAll(); window.scrollTo(0,0);
+  }));
   document.querySelectorAll('[data-alert-nav]').forEach(b=>b.addEventListener('click',()=>{currentSection=b.dataset.alertNav; renderAll();}));
   const exportAlertsBtn = document.getElementById('btnExportAlerts');
   if(exportAlertsBtn) exportAlertsBtn.addEventListener('click', ()=>{
@@ -1984,26 +2203,55 @@ function renderDashboard(){
 
 /* ============================= RENDER: INVENTORY ============================= */
 let invFilters = {search:'', bu:'all', status:'all'};
+let invScope = 'mine'; // region accounts: 'mine' = own region only, 'all' = every warehouse (view only)
 function renderInventory(){
-  const whFilter = currentFilterWarehouse();
+  if(isRegionUser() && invScope==='all' && DATA_ALL){
+    // Temporarily look at every warehouse's stock, then switch back.
+    const savedData = DATA, savedWh = WAREHOUSES;
+    DATA = Object.assign({}, DATA, {inventory: DATA_ALL.inventory});
+    WAREHOUSES = ALL_WAREHOUSES;
+    try{ renderInventoryCore(true); } finally { DATA = savedData; WAREHOUSES = savedWh; }
+    return;
+  }
+  renderInventoryCore(false);
+}
+function otherWhBreakdown(code){
+  const mine = new Set(ALL_WAREHOUSES.filter(w=>sameRegion(w.region)).map(w=>w.id));
+  const rows = (DATA_ALL ? DATA_ALL.inventory : DATA.inventory).filter(r=>r.posmCode===code && r.qty>0)
+    .sort((a,b)=>b.qty-a.qty);
+  if(!rows.length) return `<div class="cell-sub" style="margin-top:6px;">No stock in any warehouse.</div>`;
+  return `<div style="margin-top:8px;border-top:1px dashed var(--line);padding-top:6px;max-height:110px;overflow:auto;">${rows.map(r=>{
+    const w = whById(r.warehouseId);
+    return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:11.5px;line-height:1.6;${mine.has(r.warehouseId)?'font-weight:700;color:var(--primary-ink);':''}"><span>${w?escHtml(w.name):escHtml(r.warehouseId)} <span class="cell-sub">(${w?escHtml(w.region):''})</span></span><span>${r.qty.toLocaleString()}</span></div>`;
+  }).join('')}</div>`;
+}
+function renderInventoryCore(allMode){
+  const whFilter = allMode ? 'all' : currentFilterWarehouse();
   const rows = DATA.posmMaster.filter(p=>{
     if(invFilters.status==='all' && p.status==='deleted') return false;
     if(invFilters.bu!=='all' && p.bu!==invFilters.bu) return false;
     if(!matchesBUFilter(p.code)) return false;
-    if(invFilters.status!=='all' && p.status!==invFilters.status) return false;
+    if(invFilters.status==='disposal'){ if(!(p.status==='expired'||p.status==='obsolete')) return false; }
+    else if(invFilters.status!=='all' && p.status!==invFilters.status) return false;
+    // Expired/obsolete POSM with zero quantity are not shown.
+    if((p.status==='expired'||p.status==='obsolete') && totalQtyForPosm(p.code, whFilter)<=0) return false;
     if(invFilters.search && !(p.code.toLowerCase().includes(invFilters.search.toLowerCase()) || p.desc.toLowerCase().includes(invFilters.search.toLowerCase()))) return false;
     return true;
   });
   const html = `
     <div class="panel">
       <div class="panel-head">
-        <div><h3>Full Inventory</h3><div class="panel-sub">All POSM — mark items that need disposal as Expired/Obsolete, or Delete if no longer used at all</div></div>
+        <div><h3>${isRegionUser() ? (allMode ? 'All Warehouse Inventory' : 'My Inventory — '+escHtml(session.region)) : 'Full Inventory'}</h3><div class="panel-sub">${allMode ? 'Stock across every warehouse in all regions (view only) — use this to find which warehouse has the POSM you need' : (isRegionUser() ? 'Stock of your region\'s warehouses — Stock In / Stock Out quantity here (new POSM are added by Admin)' : 'All POSM — mark items that need disposal as Expired/Obsolete, or Delete if no longer used at all')}</div></div>
         <div class="panel-actions"><button class="btn" id="btnGoScan">${icon('scan',14)} Scan</button><button class="btn primary" id="btnStockIn">${icon('plus',14)} Stock In</button><button class="btn" id="btnStockOut">${icon('arrowDown',14)} Stock Out</button><button class="btn sm" id="btnExportInventory">⬇ Excel</button></div>
       </div>
+      ${isRegionUser() ? `<div class="seg" id="invScopeSeg" style="margin-bottom:12px;">
+        <button data-scope="mine" class="${invScope==='mine'?'active':''}">My Inventory (${escHtml(session.region)})</button>
+        <button data-scope="all" class="${invScope==='all'?'active':''}">Stock in Other Warehouses</button>
+      </div>` : ''}
       <div class="filters">
         <input type="text" id="invSearch" placeholder="Search POSM code or description..." value="${invFilters.search}">
         <select id="invBuFilter"><option value="all">All Business Units</option>${BUS.map(b=>`<option value="${b}" ${invFilters.bu===b?'selected':''}>${buLabel(b)}</option>`).join('')}</select>
-        <div class="seg" id="invStatusSeg">${['all','active','expired','obsolete','deleted'].map(s=>`<button data-status="${s}" class="${invFilters.status===s?'active':''}">${s==='all'?'All':s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}</div>
+        <div class="seg" id="invStatusSeg">${['all','active','disposal','expired','obsolete','deleted'].map(s=>`<button data-status="${s}" class="${invFilters.status===s?'active':''}">${s==='all'?'All':s==='disposal'?'For Disposal':s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}</div>
       </div>
       <div class="inv-grid">
         ${rows.map(p=>{
@@ -2020,8 +2268,9 @@ function renderInventory(){
                 <div><div class="cell-sub">${whFilter==='all'?'Total Qty':'Qty — '+whById(whFilter).name}</div><div class="qty-strong">${qty.toLocaleString()}</div></div>
                 <div style="text-align:right;"><div class="cell-sub">Beginning</div><div class="cell-sub" style="font-weight:600;">${beg.toLocaleString()}</div></div>
               </div>
-              <div class="inv-card-actions">
-                <select class="status-select" data-status-code="${p.code}" style="flex:1;">
+              ${allMode ? otherWhBreakdown(p.code) : ''}
+              <div class="inv-card-actions" ${allMode?'style="display:none;"':''}>
+                <select class="status-select admin-only" data-status-code="${p.code}" style="flex:1;">
                   <option value="active" ${p.status==='active'?'selected':''}>Active</option>
                   <option value="expired" ${p.status==='expired'?'selected':''}>Expired</option>
                   <option value="obsolete" ${p.status==='obsolete'?'selected':''}>Obsolete</option>
@@ -2052,6 +2301,8 @@ function renderInventory(){
     }));
     exportRowsToExcel(exportRows, 'Full-Inventory-'+todayStr()+'.xlsx', 'Full Inventory');
   });
+  const scopeSeg = document.getElementById('invScopeSeg');
+  if(scopeSeg) scopeSeg.querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{ invScope = b.dataset.scope; renderInventory(); }));
   document.getElementById('invSearch').addEventListener('input', e=>{ invFilters.search=e.target.value; renderInventory(); });
   document.getElementById('invBuFilter').addEventListener('change', e=>{ invFilters.bu=e.target.value; renderInventory(); });
   document.getElementById('invStatusSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ invFilters.status=b.dataset.status; renderInventory(); }));
@@ -2060,6 +2311,7 @@ function renderInventory(){
   document.getElementById('btnGoScan').addEventListener('click',()=>{ currentSection='scan'; renderAll(); });
   document.querySelectorAll('[data-status-code]').forEach(sel=>sel.addEventListener('change', ()=>changeStatus(sel.dataset.statusCode, sel.value)));
   loadImagesFor(rows.map(p=>p.code));
+  if(invFilters.search){ const si = document.getElementById('invSearch'); si.focus(); si.setSelectionRange(si.value.length, si.value.length); }
 
   destroyCharts(['chartInvByWh','chartInvByBu']);
   const c = getChartColors();
@@ -2651,27 +2903,27 @@ function renderOrgManage(){
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn sm" id="btnExportOrg">⬇ Excel</button></div>
     <div class="panel" style="margin-bottom:16px;">
       <div class="panel-head"><div><h3>Trade Supervisors</h3><div class="panel-sub">${tsRows.length} active</div></div>
-        <div class="panel-actions"><button class="btn primary" id="btnNewTs">${icon('plus',14)} New Trade Supervisor</button></div></div>
+        <div class="panel-actions admin-only"><button class="btn primary" id="btnNewTs">${icon('plus',14)} New Trade Supervisor</button></div></div>
       <div class="table-wrap scroll-y"><table>
-        <thead><tr><th>Name</th><th>Region</th><th>Stores</th><th>Action</th></tr></thead>
+        <thead><tr><th>Name</th><th>Region</th><th>Stores</th><th class="admin-only">Action</th></tr></thead>
         <tbody>
         ${tsRows.map(t=>{
           const storeCount = activeStoreList().filter(s=>s.tsId===t.id).length;
           return `<tr><td class="cell-main">${t.name}</td><td>${t.region}</td><td class="cell-sub">${storeCount} store(s)</td>
-            <td><button class="btn sm" data-edit-ts="${t.id}">Edit</button> <button class="btn sm danger" data-delete-ts="${t.id}">Delete</button></td></tr>`;
+            <td class="admin-only"><button class="btn sm" data-edit-ts="${t.id}">Edit</button> <button class="btn sm danger" data-delete-ts="${t.id}">Delete</button></td></tr>`;
         }).join('') || `<tr><td colspan="4" class="empty-state">No Trade Supervisors yet.</td></tr>`}
         </tbody></table></div>
     </div>
     <div class="panel">
       <div class="panel-head"><div><h3>Stores</h3><div class="panel-sub">${storeRows.length} active</div></div>
-        <div class="panel-actions"><button class="btn primary" id="btnNewStore">${icon('plus',14)} New Store</button></div></div>
+        <div class="panel-actions admin-only"><button class="btn primary" id="btnNewStore">${icon('plus',14)} New Store</button></div></div>
       <div class="table-wrap scroll-y"><table>
-        <thead><tr><th>Store</th><th>Trade Supervisor</th><th>Region</th><th>Dealer</th><th>Action</th></tr></thead>
+        <thead><tr><th>Store</th><th>Trade Supervisor</th><th>Region</th><th>Dealer</th><th class="admin-only">Action</th></tr></thead>
         <tbody>
         ${storeRows.map(s=>{
           const t = tsById(s.tsId);
           return `<tr><td class="cell-main">${s.name}</td><td>${t?t.name:'<span class="cell-sub">(unassigned)</span>'}</td><td>${s.region}</td><td class="cell-sub">${s.dealer||''}</td>
-            <td><button class="btn sm" data-edit-store="${s.id}">Edit</button> <button class="btn sm danger" data-delete-store="${s.id}">Delete</button></td></tr>`;
+            <td class="admin-only"><button class="btn sm" data-edit-store="${s.id}">Edit</button> <button class="btn sm danger" data-delete-store="${s.id}">Delete</button></td></tr>`;
         }).join('') || `<tr><td colspan="5" class="empty-state">No Stores yet.</td></tr>`}
         </tbody></table></div>
     </div>
@@ -2694,7 +2946,7 @@ function openTsModal(existing){
   const isEdit = !!existing;
   openModal(isEdit ? 'Edit Trade Supervisor' : 'New Trade Supervisor', `
     <div class="field"><label>Name</label><input type="text" id="tsNameInput" value="${existing?existing.name:''}" placeholder="Full name"></div>
-    <div class="field"><label>Region</label><select id="tsRegionInput">${REGIONS.map(r=>`<option value="${r}" ${existing&&existing.region===r?'selected':''}>${r}</option>`).join('')}</select></div>
+    <div class="field"><label>Region</label><select id="tsRegionInput">${(isRegionUser() ? REGIONS.filter(r=>sameRegion(r)) : REGIONS).map(r=>`<option value="${r}" ${existing&&existing.region===r?'selected':''}>${r}</option>`).join('')}</select></div>
   `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="tsSaveBtn">${isEdit?'Save Changes':actionLabel('Create')}</button>`);
   document.getElementById('tsSaveBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('tsSaveBtn');
@@ -2968,7 +3220,7 @@ function renderSection(sectionChanged){
   if(currentSection!=='scan' && (scannerRunning || scanner)) stopScanner();
   const section = SECTIONS.find(s=>s.key===currentSection);
   document.getElementById('pageTitle').textContent = section.label;
-  document.getElementById('pageSub').textContent = section.sub;
+  document.getElementById('pageSub').textContent = (isRegionUser() && section.regionSub) ? section.regionSub : section.sub;
   if(sectionChanged) closeSheets();
   renderTabbar();
   if(currentSection==='dashboard') renderDashboard();
@@ -3863,8 +4115,8 @@ function renderLabels(){
   { const el = document.getElementById('lblPreview'); if(el && sample) el.innerHTML = labelHtml(sample, labelState.size); }
 }
 
-document.getElementById('globalRegionFilter').addEventListener('change', ()=>{ renderWarehouseFilter(); renderAll(); });
-document.getElementById('globalBUFilter').addEventListener('change', renderAll);
+document.getElementById('globalRegionFilter').addEventListener('change', ()=>{ renderWarehouseFilter(); rebuildView(); renderAll(); });
+document.getElementById('globalBUFilter').addEventListener('change', ()=>{ rebuildView(); renderAll(); });
 document.getElementById('globalWarehouseFilter').addEventListener('change', renderAll);
 document.getElementById('notifBell').addEventListener('click', toggleNotifPanel);
 document.getElementById('hamburgerBtn').addEventListener('click', ()=>document.getElementById('sidebar').classList.toggle('open'));
