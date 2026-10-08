@@ -1008,7 +1008,18 @@ function readCreds(){
   if(!session) return {};
   return session.role==='admin' ? {adminPassword: session.password} : {region: session.region, regionPassword: session.password};
 }
+// Every change sent to the server bumps this counter (when it starts AND when it ends).
+// A data refresh that was already on its way while a change was being saved carries the
+// OLD values, so loadFromServer throws that copy away instead of letting it undo the change.
+let mutationEpoch = 0;
+function isReadAction(action){ return /^(get|login$|regionLogin$)/.test(String(action||'')); }
 async function postAction(action, payload){
+  const isWrite = !isReadAction(action);
+  if(isWrite) mutationEpoch++;
+  try{ return await postActionRaw(action, payload); }
+  finally{ if(isWrite) mutationEpoch++; }
+}
+async function postActionRaw(action, payload){
   const body = Object.assign({action}, payload);
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
@@ -1040,10 +1051,18 @@ function loadDataCache(){
   try{ const raw = localStorage.getItem(DATA_CACHE_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
 }
 let ALERTS = null; // cached alert snapshot: pending approvals, overdue/due-soon deliveries, low-stock reorder items
-async function loadFromServer(silent){
+let loadSeq = 0, appliedLoadSeq = 0;
+async function loadFromServer(silent, _retry){
   if(!silent) setSyncStatus('refreshing');
+  const startEpoch = mutationEpoch, mySeq = ++loadSeq;
   // Data is only given to a logged-in account (Admin password or region login).
   const data = await postAction('getData', readCreds());
+  // Stale copy? (a change was saved while this was loading, or a newer refresh already landed)
+  if(startEpoch !== mutationEpoch || mySeq < appliedLoadSeq){
+    if(mySeq < appliedLoadSeq){ if(!silent) setSyncStatus('live'); return; }
+    if((_retry||0) < 3) return loadFromServer(silent, (_retry||0) + 1);
+  }
+  appliedLoadSeq = mySeq;
   delete data.success;
   lastRefreshAt = Date.now();
   if(Array.isArray(data.ioSummary)) data.ioSummary = data.ioSummary.map(expandIoRow);
