@@ -1,13 +1,13 @@
 {
-  "name": "RMAS POSM Inventory",
-  "short_name": "RMAS POSM",
-  "description": "Samsung RMAS POSM inventory, scanning and requests",
+  "name": "VaultSync Inventory",
+  "short_name": "VaultSync",
+  "description": "VaultSync POSM inventory, scanning and requests",
   "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F1F3F7",
+  "background_color": "#F3F4F6",
   "theme_color": "#1428A0",
   "icons": [
     {
