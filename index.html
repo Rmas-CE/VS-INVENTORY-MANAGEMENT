@@ -202,7 +202,14 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .qty-strong{font-family:var(--font-display);font-weight:700;font-size:14px;}
 .empty-state{padding:40px 20px;text-align:center;color:var(--ink-faint);font-size:12.8px;}
 .result-note{padding:8px 16px;font-size:11.5px;color:var(--ink-faint);}
-.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;} @media(max-width:980px){.kanban{grid-template-columns:1fr;}}
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;} @media(max-width:1280px){.kanban{grid-template-columns:repeat(2,1fr);}} @media(max-width:980px){.kanban{grid-template-columns:1fr;}}
+.badge.deployed{background:color-mix(in srgb, var(--accent) 16%, transparent);color:var(--accent);} .badge.proofwait{background:var(--primary-tint);color:var(--primary-ink);}
+.proof-shots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;} .proof-shot{position:relative;aspect-ratio:1/1;border-radius:10px;overflow:hidden;background:var(--surface-alt);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-faint);font-size:11px;}
+.proof-shot img{width:100%;height:100%;object-fit:cover;cursor:zoom-in;} .proof-shot .x{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:1;cursor:pointer;}
+.proof-shot .tag{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;font-size:9.5px;padding:2px 6px;border-radius:10px;}
+.proof-flag{display:flex;gap:7px;align-items:flex-start;background:var(--warning-bg);color:var(--warning);border-radius:8px;padding:7px 10px;font-size:12px;margin-top:6px;}
+.proof-photos-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;} .proof-photos-big img{width:100%;border-radius:10px;display:block;cursor:zoom-in;background:var(--surface-alt);}
+
 .kanban-col{background:var(--surface-alt);border:1px solid var(--line);border-radius:var(--radius);padding:12px;min-height:120px;}
 .kanban-col-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 2px;}
 .kanban-col-head h4{font-size:12.5px;}
@@ -622,6 +629,7 @@ document.querySelectorAll('video.brand-mark').forEach(v=>{
 
 /* ============================= ICONS ============================= */
 const ICONS = {
+  camera:'<path d="M4 8h3l2-3h6l2 3h3v11H4V8Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
   dashboard:'<path d="M3 13h5V3H3v10Zm0 8h5v-6H3v6Zm8 0h5V11h-5v10Zm0-18v6h5V3h-5Z"/>',
   inventory:'<path d="M21 8 12 3 3 8m18 0-9 5m9-5v9l-9 5m0-9L3 8m9 5v9M3 8v9l9 5" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke="currentColor" stroke-width="1.6"/>',
   stock:'<path d="M4 17V7l8-4 8 4v10l-8 4-8-4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 7l8 4 8-4M12 11v10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
@@ -761,6 +769,7 @@ function scopeData(d){
     tradeSupervisors: tsList,
     stores: storeList,
     orgChanges: !m ? (d.orgChanges||[]) : (d.orgChanges||[]).filter(o=>(isRegionUser() && o.performedBy===session.name) || orgIds.has(o.entityId)),
+    deployments: (d.deployments||[]).filter(x=>okWh(x.warehouseId)),
   });
 }
 // Re-apply the current filters to the full data and redraw.
@@ -1241,20 +1250,24 @@ document.getElementById('regionAccountsBtn') && document.getElementById('regionA
   });
 });
 const REQUEST_FORM_URL = 'https://samsung-ce.github.io/RMAS-REQUEST-FORM/';
+const PROOF_TOOL_URL = REQUEST_FORM_URL + 'proof.html'; // Proof of Deployment page (same GitHub repo as the Request Form)
 document.getElementById('requestKeyBtn') && document.getElementById('requestKeyBtn').addEventListener('click', async ()=>{
   let cur = '';
   try{ cur = (await postAction('getRequestFormKey', {adminPassword: session.password})).requestFormKey || ''; }
   catch(e){ alert(e.message || 'Could not load the key.'); return; }
   const linkFor = k => k ? REQUEST_FORM_URL + '?key=' + encodeURIComponent(k) : REQUEST_FORM_URL;
+  const proofFor = k => k ? PROOF_TOOL_URL + '?key=' + encodeURIComponent(k) : PROOF_TOOL_URL;
   openModal('Request Form Key', `
     <p class="login-note" style="margin-top:0;">Stops strangers from sending fake requests. When a key is set, only the Request Form link that carries the key (and logged-in users of this tool) can submit requests. Leave it empty to turn the key off.</p>
     <div class="notice" style="margin-bottom:12px;">${icon('alert',15)}<div><b>Before turning it on</b>, the Request Form tool must be updated to send the key — otherwise it will stop working.</div></div>
     <div class="field"><label>Access key (6-40 letters / numbers)</label><div style="display:flex;gap:8px;"><input type="text" id="rkInput" value="${escHtml(cur)}" placeholder="e.g. rmas-7Kq2x9"><button class="btn" id="rkGen" type="button">Generate</button></div></div>
     <div class="field"><label>Link to share with Trade Supervisors / stores</label><input type="text" id="rkLink" readonly value="${escHtml(linkFor(cur))}" onclick="this.select()"></div>
+    <div class="field"><label>Proof of Deployment link (same key — for uploading photos after delivery)</label><input type="text" id="rkProof" readonly value="${escHtml(proofFor(cur))}" onclick="this.select()"></div>
   `, `<button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" id="rkSave">Save</button>`);
   const inp = document.getElementById('rkInput'), link = document.getElementById('rkLink');
-  inp.addEventListener('input', ()=>{ link.value = linkFor(inp.value.trim()); });
-  document.getElementById('rkGen').addEventListener('click', ()=>{ const a = new Uint8Array(6); crypto.getRandomValues(a); inp.value = 'rmas-' + Array.from(a, b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join(''); link.value = linkFor(inp.value); });
+  const proofLink = document.getElementById('rkProof');
+  inp.addEventListener('input', ()=>{ link.value = linkFor(inp.value.trim()); proofLink.value = proofFor(inp.value.trim()); });
+  document.getElementById('rkGen').addEventListener('click', ()=>{ const a = new Uint8Array(6); crypto.getRandomValues(a); inp.value = 'rmas-' + Array.from(a, b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join(''); link.value = linkFor(inp.value); proofLink.value = proofFor(inp.value); });
   document.getElementById('rkSave').addEventListener('click', async ()=>{
     const btn = document.getElementById('rkSave'); btn.disabled = true; btn.textContent = 'Saving...';
     try{ const r = await postAction('saveRequestFormKey', {adminPassword: session.password, requestFormKey: inp.value.trim()}); alert(r.requestFormKey ? 'Key saved. Share the new link.' : 'Key turned off.'); closeModal(); }
@@ -1921,6 +1934,319 @@ function whOptions(selected, includeAll){
   return html;
 }
 
+/* ===================== PROOF OF DEPLOYMENT — PHOTO KIT =====================
+   Shared by the Inventory Tool and the Proof of Deployment page.
+   For each photo:
+   • fingerprint (SHA-256 of the ORIGINAL file) — the server refuses a photo already used
+   • picture fingerprint (dHash) — the server flags a look-alike of another store's photo
+   • camera date (EXIF) — flagged if the photo was taken before the delivery date
+   • request #, store, date/time and GPS are printed ON the photo (watermark)
+   • compressed to fit one Google Sheets cell */
+const PK_MAX_CHARS = 46000;
+const PK_FLAG_LABELS = {
+  old_photo: 'Photo was taken BEFORE the delivery date',
+  no_camera_time: 'No camera date on the photo (screenshot / forwarded / edited?)',
+  gallery: 'Picked from the gallery, not taken with the camera',
+  no_gps: 'No GPS location',
+  similar: 'Looks like a photo already used for another request',
+};
+function pkFlagLabel(f){ return PK_FLAG_LABELS[f] || f; }
+
+async function pkSha256(buf){
+  if(!(window.crypto && crypto.subtle)) throw new Error('Please open the secure (https) link of this tool.');
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(h), b=>b.toString(16).padStart(2,'0')).join('');
+}
+// EXIF DateTimeOriginal / DateTime and camera model from a JPEG.
+function pkReadExif(buf){
+  const out = {takenAt:'', model:''};
+  try{
+    const v = new DataView(buf);
+    if(v.getUint16(0) !== 0xFFD8) return out;
+    let off = 2;
+    while(off + 4 < v.byteLength){
+      const marker = v.getUint16(off); const len = v.getUint16(off+2);
+      if(marker === 0xFFE1 && v.getUint32(off+4) === 0x45786966){ // "Exif"
+        const t = off + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = o=>v.getUint16(t+o, le), u32 = o=>v.getUint32(t+o, le);
+        const str = (o,n)=>{ let s=''; for(let i=0;i<n;i++){ const c=v.getUint8(t+o+i); if(!c) break; s+=String.fromCharCode(c); } return s.trim(); };
+        const readIfd = (ifd, want)=>{
+          const res = {}; const n = u16(ifd);
+          for(let i=0;i<n;i++){
+            const e = ifd + 2 + i*12, tag = u16(e), type = u16(e+2), cnt = u32(e+4);
+            if(want.indexOf(tag) === -1) continue;
+            if(type === 2) res[tag] = str(cnt > 4 ? u32(e+8) : e+8, cnt);
+            else if(type === 4) res[tag] = u32(e+8);
+          }
+          return res;
+        };
+        const ifd0 = readIfd(u32(4), [0x0132, 0x0110, 0x8769]);
+        let dt = ifd0[0x0132] || '';
+        if(ifd0[0x8769]){ const ex = readIfd(ifd0[0x8769], [0x9003]); if(ex[0x9003]) dt = ex[0x9003]; }
+        const m = String(dt).match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+        if(m && m[1] !== '0000') out.takenAt = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
+        out.model = String(ifd0[0x0110] || '').slice(0, 40);
+        return out;
+      }
+      if((marker & 0xFF00) !== 0xFF00 || marker === 0xFFDA) break;
+      off += 2 + len;
+    }
+  }catch(e){}
+  return out;
+}
+async function pkLoadBitmap(file){
+  if(window.createImageBitmap){ try{ return await createImageBitmap(file, {imageOrientation:'from-image'}); }catch(e){} }
+  return await new Promise((res, rej)=>{ const url = URL.createObjectURL(file); const im = new Image(); im.onload = ()=>{ res(im); }; im.onerror = ()=>rej(new Error('This file is not a photo the browser can open.')); im.src = url; });
+}
+// 64-bit difference hash, survives re-saving / resizing of the same picture.
+function pkDHash(bmp){
+  const c = document.createElement('canvas'); c.width = 9; c.height = 8;
+  const x = c.getContext('2d'); x.drawImage(bmp, 0, 0, 9, 8);
+  const d = x.getImageData(0, 0, 9, 8).data; let bits = '';
+  for(let y=0;y<8;y++) for(let i=0;i<8;i++){
+    const a = (y*9+i)*4, b = a+4;
+    bits += (d[a]*.299+d[a+1]*.587+d[a+2]*.114) > (d[b]*.299+d[b+1]*.587+d[b+2]*.114) ? '1' : '0';
+  }
+  let hex = ''; for(let i=0;i<64;i+=4) hex += parseInt(bits.slice(i,i+4),2).toString(16);
+  return hex;
+}
+function pkFmtStamp(d){
+  const p = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Reads a picked file once (fingerprints + camera date + preview).
+async function pkInspect(file){
+  const buf = await file.arrayBuffer();
+  const hash = await pkSha256(buf);
+  const exif = pkReadExif(buf);
+  const bmp = await pkLoadBitmap(file);
+  const ahash = pkDHash(bmp);
+  const c = document.createElement('canvas'); const s = Math.min(1, 240 / Math.max(bmp.width, bmp.height));
+  c.width = Math.round(bmp.width*s); c.height = Math.round(bmp.height*s); c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return {file, hash, ahash, takenAt: exif.takenAt, model: exif.model, lastModified: file.lastModified || 0, bmp, thumb: c.toDataURL('image/jpeg', .7)};
+}
+// Final photo: resized, watermarked, compressed under the cell limit.
+function pkRender(info, stamp){
+  const bmp = info.bmp;
+  const lines = [
+    stamp.title,
+    'Taken: ' + (info.takenAt ? info.takenAt.replace('T',' ').slice(0,16) : 'unknown') + '   Uploaded: ' + pkFmtStamp(new Date()),
+    stamp.gps ? `GPS ${stamp.gps.lat.toFixed(5)}, ${stamp.gps.lng.toFixed(5)} (±${Math.round(stamp.gps.acc)}m)` : 'GPS: not available',
+  ];
+  let maxW = 1100, q = .72, url = '';
+  for(let attempt=0; attempt<10; attempt++){
+    const s = Math.min(1, maxW / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width*s), h = Math.round(bmp.height*s);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d'); x.drawImage(bmp, 0, 0, w, h);
+    const fs = Math.max(11, Math.round(w/42)), pad = Math.round(fs*.6), bh = lines.length*fs*1.3 + pad*2;
+    x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, h-bh, w, bh);
+    x.fillStyle = '#fff'; x.textBaseline = 'top';
+    lines.forEach((ln, i)=>{ x.font = (i===0?'bold ':'') + fs + 'px Arial, sans-serif'; x.fillText(ln, pad, h-bh+pad+i*fs*1.3, w-pad*2); });
+    url = c.toDataURL('image/jpeg', q);
+    if(url.length <= PK_MAX_CHARS) break;
+    if(q > .45) q -= .08; else maxW = Math.round(maxW*.85);
+  }
+  return url;
+}
+function pkGetGps(timeoutMs){
+  return new Promise(res=>{
+    if(!navigator.geolocation){ res(null); return; }
+    let done = false; const fin = v=>{ if(!done){ done = true; res(v); } };
+    setTimeout(()=>fin(null), (timeoutMs||15000) + 500);
+    navigator.geolocation.getCurrentPosition(p=>fin({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy||0}), ()=>fin(null), {enableHighAccuracy:true, timeout:timeoutMs||15000, maximumAge:60000});
+  });
+}
+// Flags for the Admin, from the photo details.
+function pkFlags(infos, gps, deliveredDate){
+  const f = new Set();
+  infos.forEach(i=>{
+    if(i.gallery) f.add('gallery');
+    if(!i.takenAt) f.add('no_camera_time');
+    const day = i.takenAt ? i.takenAt.slice(0,10) : '';
+    if(deliveredDate && day && day < String(deliveredDate).slice(0,10)) f.add('old_photo');
+  });
+  if(!gps) f.add('no_gps');
+  return Array.from(f);
+}
+// Builds the payload sent to submitDeployment.
+async function pkBuildPayload(infos, gps, stamp, deliveredDate){
+  const photos = infos.map(i=>({image: pkRender(i, Object.assign({}, stamp, {gps})), hash: i.hash, ahash: i.ahash}));
+  const taken = infos.map(i=>i.takenAt).filter(Boolean).sort();
+  return {
+    photos, lat: gps ? gps.lat : '', lng: gps ? gps.lng : '', acc: gps ? Math.round(gps.acc) : '',
+    photoTakenAt: taken[0] || '', flags: pkFlags(infos, gps, deliveredDate).join(','),
+  };
+}
+
+/* ---- Proof of Deployment: data helpers ---- */
+let _proofIdx = null, _proofIdxSrc = null;
+function proofIndex(){
+  const src = (DATA && DATA.deployments) || [];
+  if(_proofIdxSrc === src && _proofIdx) return _proofIdx;
+  const m = {};
+  src.forEach(d=>{ const k = d.requestId; if(!m[k] || String(d.uploadedAt) > String(m[k].uploadedAt)) m[k] = d; });
+  _proofIdx = m; _proofIdxSrc = src; return m;
+}
+function proofOf(r){ return r ? (proofIndex()[r.id] || null) : null; }
+function proofStartDate(){ return (DATA_ALL && DATA_ALL.proofStartDate) || '9999-12-31'; }
+function proofGrace(){ return (DATA_ALL && Number(DATA_ALL.proofGraceDays)) || 3; }
+function isDeployed(r){ const p = proofOf(r); return !!(r && r.status==='delivered' && p && (p.status==='for_review' || p.status==='verified')); }
+function daysSinceDate(d){ return Math.max(0, Math.round((new Date(todayStr()) - new Date(String(d).slice(0,10)))/86400000)); }
+// Delivered more than the grace days ago, and still no accepted proof.
+function proofMissingList(){
+  const cut = addDays(todayStr(), -proofGrace()), from = proofStartDate(), whF = currentFilterWarehouse();
+  return DATA.requests.filter(r=> r.status==='delivered' && r.dateDelivered && String(r.dateDelivered) >= from && String(r.dateDelivered) < cut &&
+      (whF==='all' || r.warehouseId===whF) && matchesBUFilter(r.posmCode) && !isDeployed(r))
+    .sort((a,b)=>String(a.dateDelivered).localeCompare(String(b.dateDelivered)));
+}
+// Uploads waiting for the Admin (one entry per upload, even if it covers several requests).
+function proofReviewList(){
+  const whF = currentFilterWarehouse(), seen = {}, out = [];
+  (DATA.deployments||[]).forEach(d=>{
+    if(d.status!=='for_review' || (whF!=='all' && d.warehouseId!==whF)) return;
+    const g = d.groupId || d.id; if(seen[g]) return; seen[g] = true;
+    const latest = proofIndex()[d.requestId]; if(!latest || (latest.groupId||latest.id)!==g) return;
+    out.push(d);
+  });
+  return out.sort((a,b)=>String(a.uploadedAt).localeCompare(String(b.uploadedAt)));
+}
+function proofChipHtml(r){
+  const p = proofOf(r);
+  if(p && p.status==='verified') return `<span class="badge delivered">${icon('check',11)} Proof verified</span>`;
+  if(p && p.status==='for_review') return `<span class="badge proofwait">${icon('clock',11)} Proof for review</span>`;
+  if(p && p.status==='rejected') return `<span class="badge expired">Proof rejected — upload again</span>`;
+  if(!r.dateDelivered || String(r.dateDelivered) < proofStartDate()) return `<span class="cell-sub">No proof (delivered before proof tracking)</span>`;
+  const d = daysSinceDate(r.dateDelivered);
+  return `<span class="badge ${d>proofGrace()?'expired':'obsolete'}">${icon('camera',11)} No proof yet · ${d===0?'today':d+' day'+(d!==1?'s':'')}</span>`;
+}
+function fmtDT(v){ if(!v) return ''; const d = new Date(v); if(isNaN(d) || !/T\d{2}:\d{2}.*Z$/.test(String(v))) return String(v).replace('T',' ').slice(0,16); return pkFmtStamp(d); }
+function proofStatusLabel(r){
+  const p = proofOf(r); if(r.status!=='delivered') return '';
+  if(!p) return String(r.dateDelivered||'') < proofStartDate() ? 'Not tracked' : 'No proof yet';
+  return {verified:'Verified', for_review:'For review', rejected:'Rejected'}[p.status] || p.status;
+}
+
+/* ---- Proof of Deployment: upload (Inventory Tool) ---- */
+function openProofUploadModal(reqId){
+  const r0 = DATA.requests.find(r=>r.id===reqId); if(!r0) return;
+  const others = DATA.requests.filter(r=>r.status==='delivered' && r.store===r0.store && !isDeployed(r))
+    .sort((a,b)=>(a.id===reqId?-1:b.id===reqId?1:String(b.dateDelivered).localeCompare(String(a.dateDelivered))));
+  const st = {pick:{[reqId]:true}, infos:[], gps:null, gpsState:'loading', busy:false};
+  openModal(`${icon('camera',16)} Proof of Deployment`, `
+    <p class="login-note" style="margin-top:0;">Upload 1–3 photos of the POSM <b>installed at the store</b>. The request #, store, date/time and GPS are printed on each photo. A photo already used for another request is refused.</p>
+    <div class="field"><label>Store</label><div style="font-weight:700;">${escHtml(r0.store)}</div></div>
+    <div class="field"><label>Requests this proof covers</label><div id="puItems" class="table-wrap scroll-y" style="max-height:170px;"></div></div>
+    <div class="field"><label>Photos</label><div id="puShots"></div></div>
+    <div class="field"><label>Location</label><div id="puGps" style="font-size:13px;"></div></div>
+    <div class="two-col">
+      <div class="field"><label>Uploaded by</label><input type="text" id="puName" maxlength="60" value="${escHtml(session ? (session.role==='admin' ? 'Admin' : session.region) : '')}"></div>
+      <div class="field"><label>Note (optional)</label><input type="text" id="puNote" maxlength="300" placeholder="e.g. Installed at the AC section"></div>
+    </div>
+    ${session && session.role==='admin' ? `<div class="notice" style="margin:0;">${icon('info',15)}<div>Proof uploaded by Admin is marked <b>Verified</b> right away.</div></div>` : `<div class="notice" style="margin:0;">${icon('info',15)}<div>The Admin will check your photos and mark them <b>Verified</b>.</div></div>`}
+  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="puSubmit" disabled>Submit Proof</button>`);
+  const items = ()=>others.filter(r=>st.pick[r.id]);
+  const earliest = ()=>items().map(r=>r.dateDelivered).filter(Boolean).sort()[0] || '';
+  function drawItems(){
+    document.getElementById('puItems').innerHTML = others.map(r=>{ const p = posmByCode(r.posmCode);
+      return `<label style="display:flex;gap:9px;align-items:flex-start;padding:7px 4px;border-bottom:1px solid var(--line);cursor:pointer;"><input type="checkbox" data-pu="${escHtml(r.id)}" ${st.pick[r.id]?'checked':''} style="width:auto;margin-top:3px;">
+        <div><div class="cell-main">${escHtml(r.posmCode)} × ${r.qty} <span class="cell-sub">${escHtml(r.id)}</span></div><div class="cell-sub">${escHtml(p?p.desc:'')} · Delivered ${r.dateDelivered?fmtDateShort(r.dateDelivered):''}</div></div></label>`; }).join('');
+    document.querySelectorAll('[data-pu]').forEach(cb=>cb.addEventListener('change', ()=>{ if(cb.checked) st.pick[cb.dataset.pu]=true; else delete st.pick[cb.dataset.pu]; draw(); }));
+  }
+  function draw(){
+    const flags = st.infos.length ? pkFlags(st.infos, st.gps, earliest()).filter(f=>f!=='no_gps') : [];
+    document.getElementById('puShots').innerHTML = `<div class="proof-shots">${[0,1,2].map(i=>{ const p = st.infos[i];
+        return p ? `<div class="proof-shot"><img src="${p.thumb}" alt=""><button class="x" data-rm="${i}" type="button">×</button><span class="tag">${p.gallery?'Gallery':'Camera'}</span></div>` : `<div class="proof-shot">Photo ${i+1}</div>`; }).join('')}</div>
+      ${st.infos.length<3 ? `<div style="display:flex;gap:8px;margin-top:8px;">
+        <label class="btn primary sm" style="cursor:pointer;">${icon('camera',13)} Take photo<input type="file" accept="image/*" capture="environment" id="puCam" style="display:none;"></label>
+        <label class="btn sm" style="cursor:pointer;">From gallery<input type="file" accept="image/*" id="puGal" style="display:none;"></label></div>` : ''}
+      ${flags.map(f=>`<div class="proof-flag">${icon('alert',13)}<div>${escHtml(pkFlagLabel(f))}</div></div>`).join('')}<div id="puErr"></div>`;
+    document.getElementById('puGps').innerHTML = st.gpsState==='loading' ? 'Getting location...' : st.gpsState==='ok'
+      ? `<span style="color:var(--success);font-weight:600;">${icon('check',13)} GPS ready (±${Math.round(st.gps.acc)} m)</span>`
+      : `<span style="color:var(--warning);">Location not available</span> <button class="btn sm" id="puGpsRetry" type="button">Try again</button>`;
+    const sb = document.getElementById('puSubmit');
+    if(sb){ sb.disabled = st.busy || !st.infos.length || !items().length || st.gpsState==='loading'; sb.textContent = st.busy ? 'Uploading...' : (st.gpsState==='loading' && st.infos.length ? 'Waiting for GPS...' : 'Submit Proof' + (items().length>1 ? ' ('+items().length+')' : '')); }
+    const wire = (id, gallery)=>{ const inp = document.getElementById(id); if(inp) inp.addEventListener('change', ()=>add(inp.files && inp.files[0], gallery)); };
+    wire('puCam', false); wire('puGal', true);
+    document.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click', ()=>{ st.infos.splice(Number(b.dataset.rm),1); draw(); }));
+    const rt = document.getElementById('puGpsRetry'); if(rt) rt.addEventListener('click', gps);
+  }
+  async function add(file, gallery){
+    if(!file) return;
+    try{ const info = await pkInspect(file); info.gallery = gallery;
+      if(st.infos.some(x=>x.hash===info.hash)) throw new Error('You already added this same photo.');
+      st.infos.push(info); draw();
+    }catch(e){ draw(); const el = document.getElementById('puErr'); if(el) el.innerHTML = `<div class="proof-flag" style="background:var(--danger-bg);color:var(--danger);">${escHtml(e.message||'Could not read the photo.')}</div>`; }
+  }
+  async function gps(){ st.gpsState='loading'; draw(); const g = await pkGetGps(15000); st.gps = g; st.gpsState = g ? 'ok' : 'none'; if(document.getElementById('puShots')) draw(); }
+  drawItems(); draw(); gps();
+  document.getElementById('puSubmit').addEventListener('click', async ()=>{
+    const list = items(); if(!list.length || !st.infos.length) return;
+    const name = document.getElementById('puName').value.trim();
+    if(!name){ alert('Please type who is uploading.'); return; }
+    st.busy = true; draw();
+    try{
+      const title = (list.length===1 ? list[0].id : list[0].id+' +'+(list.length-1)) + ' · ' + r0.store;
+      const payload = await pkBuildPayload(st.infos, st.gps, {title}, earliest());
+      const res = await postAction('submitDeployment', Object.assign({}, readCreds(), payload, {requestIds: list.map(r=>r.id), uploadedBy: name, note: document.getElementById('puNote').value.trim(), source:'inventory-tool'}));
+      // Show it right away; the next refresh brings the server copy.
+      const now = new Date().toISOString();
+      list.forEach((r,i)=>{ const row = {id: i===0?res.id:res.id+'-'+(i+1), groupId: res.id, requestId: r.id, warehouseId: r.warehouseId, store: r.store, photoCount: st.infos.length,
+        uploadedAt: now, uploadedBy: name, status: res.status, flags: res.flags||'', note:'', lat: st.gps?st.gps.lat:'', lng: st.gps?st.gps.lng:'', acc: st.gps?Math.round(st.gps.acc):''};
+        (DATA_ALL.deployments = DATA_ALL.deployments || []).unshift(row); });
+      DATA = scopeData(DATA_ALL); _proofIdx = null;
+      closeModal(); renderAll();
+      alert(res.status==='verified' ? 'Proof saved and verified.' : 'Proof submitted. It is now in the Deployed column, waiting for Admin review.');
+      loadFromServer(true).catch(()=>{});
+    }catch(e){ st.busy = false; draw(); alert(e.message || 'Upload failed.'); }
+  });
+}
+
+/* ---- Proof of Deployment: view / review ---- */
+async function openProofViewModal(reqId){
+  const r0 = DATA.requests.find(r=>r.id===reqId) || (DATA_ALL.requests||[]).find(r=>r.id===reqId); if(!r0) return;
+  const p = proofOf(r0); if(!p){ openProofUploadModal(reqId); return; }
+  const gid = p.groupId || p.id;
+  const covered = (DATA_ALL.deployments||[]).filter(d=>(d.groupId||d.id)===gid).map(d=>(DATA_ALL.requests||[]).find(r=>r.id===d.requestId) || {id:d.requestId});
+  const flags = String(p.flags||'').split(',').filter(Boolean);
+  const isAdmin = session && session.role==='admin';
+  const stBadge = p.status==='verified' ? `<span class="badge delivered">Verified</span>` : p.status==='for_review' ? `<span class="badge proofwait">Waiting for review</span>` : `<span class="badge expired">Rejected</span>`;
+  const hasGps = p.lat!=='' && p.lat!=null && !isNaN(Number(p.lat)) && p.lng!=='' && p.lng!=null;
+  openModal(`${icon('camera',16)} Proof of Deployment — ${escHtml(r0.store)}`, `
+    <div id="pvPhotos" class="proof-photos-big"><div class="cell-sub">Loading photos...</div></div>
+    ${flags.length ? `<div style="margin-top:10px;">${flags.map(f=>`<div class="proof-flag">${icon('alert',13)}<div><b>Check:</b> ${escHtml(pkFlagLabel(f))}</div></div>`).join('')}</div>` : `<div class="proof-flag" style="background:var(--success-bg);color:var(--success);margin-top:10px;">${icon('check',13)}<div>No warnings: camera photo, taken after delivery, with GPS.</div></div>`}
+    <div class="table-wrap" style="margin-top:12px;"><table class="inv-table"><tbody>
+      <tr><td class="cell-sub" style="width:150px;">Status</td><td>${stBadge}${p.status==='rejected'&&p.rejectReason?` <span class="cell-sub">Reason: ${escHtml(p.rejectReason)}</span>`:''}</td></tr>
+      <tr><td class="cell-sub">Uploaded</td><td>${escHtml(p.uploadedBy||'')} · ${p.uploadedAt?escHtml(fmtDT(p.uploadedAt)):''}</td></tr>
+      <tr><td class="cell-sub">Photo taken</td><td>${p.photoTakenAt?escHtml(String(p.photoTakenAt).replace('T',' ').slice(0,16)):'<span class="cell-sub">unknown</span>'} · Delivered ${r0.dateDelivered?fmtDate(r0.dateDelivered):''}</td></tr>
+      <tr><td class="cell-sub">GPS</td><td>${hasGps ? `<a href="https://www.google.com/maps?q=${Number(p.lat)},${Number(p.lng)}" target="_blank" rel="noopener">${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}</a> <span class="cell-sub">±${escHtml(p.acc)} m — open the map to check it is the store</span>` : '<span class="cell-sub">not available</span>'}</td></tr>
+      ${p.note?`<tr><td class="cell-sub">Note</td><td>${escHtml(p.note)}</td></tr>`:''}
+      ${p.reviewedAt?`<tr><td class="cell-sub">Reviewed</td><td>${escHtml(p.reviewedBy||'')} · ${escHtml(fmtDT(p.reviewedAt))}</td></tr>`:''}
+      <tr><td class="cell-sub">Covers</td><td>${covered.map(r=>`<div><b>${escHtml(r.posmCode||'')}</b>${r.qty?' × '+r.qty:''} <span class="cell-sub">${escHtml(r.id)}</span></div>`).join('')}</td></tr>
+    </tbody></table></div>
+    ${isAdmin ? `<div class="field" id="pvRejectWrap" style="display:none;margin-top:12px;"><label>Reason for rejecting (shown to the uploader)</label><input type="text" id="pvReason" maxlength="300" placeholder="e.g. Photo does not show the POSM installed"></div>` : ''}
+  `, `<button class="btn ghost" onclick="closeModal()">Close</button>${isAdmin && p.status!=='rejected' ? `<button class="btn" id="pvReject" style="color:var(--danger);">Reject</button>` : ''}${isAdmin && p.status==='for_review' ? `<button class="btn primary" id="pvVerify">${icon('check',13)} Verify</button>` : ''}${p.status==='rejected' ? `<button class="btn primary" id="pvReupload">${icon('camera',13)} Upload again</button>` : ''}`, 'xl');
+  const review = async (decision)=>{
+    const reason = decision==='reject' ? (document.getElementById('pvReason').value||'').trim() : '';
+    if(decision==='reject' && !reason){ document.getElementById('pvRejectWrap').style.display=''; document.getElementById('pvReason').focus(); return; }
+    try{
+      await postAction('reviewDeployment', {adminPassword: session.password, id: p.id, decision, reason});
+      (DATA_ALL.deployments||[]).forEach(d=>{ if((d.groupId||d.id)===gid){ d.status = decision==='verify'?'verified':'rejected'; d.reviewedBy='Admin'; d.reviewedAt=new Date().toISOString(); d.rejectReason = reason; } });
+      DATA = scopeData(DATA_ALL); _proofIdx = null; closeModal(); renderAll();
+    }catch(e){ alert(e.message || 'Could not save.'); }
+  };
+  const v = document.getElementById('pvVerify'); if(v) v.addEventListener('click', ()=>review('verify'));
+  const rj = document.getElementById('pvReject'); if(rj) rj.addEventListener('click', ()=>{ const w = document.getElementById('pvRejectWrap'); if(w.style.display==='none'){ w.style.display=''; document.getElementById('pvReason').focus(); rj.textContent='Confirm Reject'; } else review('reject'); });
+  const ru = document.getElementById('pvReupload'); if(ru) ru.addEventListener('click', ()=>{ closeModal(); openProofUploadModal(reqId); });
+  try{
+    const res = await postAction('getDeploymentPhotos', Object.assign({}, readCreds(), {id: p.id}));
+    const el = document.getElementById('pvPhotos'); if(!el) return;
+    const photos = (res.photos||[]).map(safeImgSrc).filter(Boolean);
+    el.innerHTML = photos.length ? photos.map((src,i)=>`<img src="${src}" alt="Proof photo ${i+1}" data-big="${i}">`).join('') : '<div class="cell-sub">No photo found.</div>';
+    el.querySelectorAll('[data-big]').forEach(im=>im.addEventListener('click', ()=>{ const w = window.open(''); if(w){ w.document.write('<title>Proof photo</title><body style="margin:0;background:#111"><img style="max-width:100%;display:block;margin:auto" src="'+im.src+'"></body>'); } }));
+  }catch(e){ const el = document.getElementById('pvPhotos'); if(el) el.innerHTML = `<div class="cell-sub" style="color:var(--danger);">${escHtml(e.message||'Could not load the photos.')}</div>`; }
+}
+
 /* ---- Image helpers (receipt proof) ---- */
 function resizeImageFile(file, maxWidth, maxChars){
   maxChars = maxChars || 42000; // headroom under Sheets' 50,000-char/cell limit, plus room for the
@@ -2332,6 +2658,33 @@ function openAlertDetail(kind){
     exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Due Date':r.dueDate}));
     exportName = kind==='overdue' ? 'Overdue-Deliveries' : 'Due-Soon-Deliveries';
     goBtn = `<button class="btn" id="alGo" data-go="requests">Open Requests board</button>`;
+  } else if(kind==='noproof'){
+    const list = proofMissingList();
+    title = `No Proof of Deployment — ${list.length}`;
+    intro = `Requests <b>Delivered more than ${proofGrace()} days ago</b> that still have no accepted photo proof (or the proof was rejected). Oldest first.`;
+    table = `<table class="inv-table"><thead><tr><th>Request</th><th>POSM</th><th>Store / TS</th><th>Warehouse</th><th>Delivered</th><th></th></tr></thead><tbody>
+      ${list.map(r=>{ const p = posmByCode(r.posmCode), w = whById(r.warehouseId), d = daysSinceDate(r.dateDelivered), pf = proofOf(r);
+        return `<tr><td class="cell-sub">${r.id}</td><td><div class="cell-main">${r.posmCode} × ${r.qty}</div><div class="cell-sub">${p?p.desc:''}</div></td>
+          <td><div>${r.store}</div><div class="cell-sub">${r.ts||''}</div></td><td class="cell-sub">${w?w.name:r.warehouseId}</td>
+          <td><div style="white-space:nowrap;">${fmtDate(r.dateDelivered)}</div><span class="badge expired">${pf&&pf.status==='rejected'?'Rejected · ':''}${d} days</span></td>
+          <td><button class="btn sm primary" data-al-proof-up="${r.id}">${icon('camera',12)} Upload</button></td></tr>`; }).join('')}
+      </tbody></table>`;
+    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Date Delivered':r.dateDelivered, 'Days Since Delivery':daysSinceDate(r.dateDelivered), 'Proof Status':proofStatusLabel(r)}));
+    exportName = 'No-Proof-of-Deployment';
+    goBtn = `<button class="btn" id="alGo" data-go="requests">Open Requests board</button>`;
+  } else if(kind==='proofreview'){
+    const list = proofReviewList();
+    title = `Proof to Review — ${list.length}`;
+    intro = 'Photo proofs uploaded after delivery, waiting for you to <b>Verify</b> or <b>Reject</b>. Oldest first.';
+    table = `<table class="inv-table"><thead><tr><th>Store</th><th>Covers</th><th>Uploaded</th><th>Warnings</th><th></th></tr></thead><tbody>
+      ${list.map(d=>{ const g = d.groupId||d.id, cov = (DATA.deployments||[]).filter(x=>(x.groupId||x.id)===g); const fl = String(d.flags||'').split(',').filter(Boolean);
+        return `<tr><td><div class="cell-main">${d.store}</div><div class="cell-sub">${(whById(d.warehouseId)||{}).name||d.warehouseId}</div></td>
+          <td class="cell-sub">${cov.map(x=>x.requestId).join(', ')}</td><td><div>${escHtml(d.uploadedBy||'')}</div><div class="cell-sub">${fmtDT(d.uploadedAt)}</div></td>
+          <td style="white-space:normal;min-width:160px;font-size:12px;">${fl.length ? fl.map(f=>`<div style="color:var(--warning);">• ${escHtml(pkFlagLabel(f))}</div>`).join('') : '<span style="color:var(--success);">None</span>'}</td>
+          <td><button class="btn sm primary" data-al-proof-view="${d.requestId}">Review</button></td></tr>`; }).join('')}
+      </tbody></table>`;
+    exportRows = list.map(d=>({'Proof ID':d.groupId||d.id, Store:d.store, Requests:(DATA.deployments||[]).filter(x=>(x.groupId||x.id)===(d.groupId||d.id)).map(x=>x.requestId).join(', '), 'Uploaded By':d.uploadedBy, 'Uploaded At':fmtDT(d.uploadedAt), Warnings:String(d.flags||'').split(',').filter(Boolean).map(pkFlagLabel).join('; ')}));
+    exportName = 'Proof-To-Review';
   } else if(kind==='pendingList'){
     const list = (DATA.pendingActions||[]).filter(x=>x.status==='pending').sort((a,b)=>String(a.submittedAt).localeCompare(String(b.submittedAt)));
     title = `Awaiting Approval — ${list.length}`;
@@ -2351,6 +2704,8 @@ function openAlertDetail(kind){
   if(ex) ex.addEventListener('click', ()=> exportRowsToExcel(exportRows, exportName+'-'+todayStr()+'.xlsx', title.split(' — ')[0]));
   const go = document.getElementById('alGo');
   if(go) go.addEventListener('click', ()=>{ closeModal(); currentSection = go.dataset.go; renderAll(); });
+  document.querySelectorAll('[data-al-proof-up]').forEach(b=>b.addEventListener('click', ()=>{ closeModal(); openProofUploadModal(b.dataset.alProofUp); }));
+  document.querySelectorAll('[data-al-proof-view]').forEach(b=>b.addEventListener('click', ()=>{ closeModal(); openProofViewModal(b.dataset.alProofView); }));
   mobileizeTables();
 }
 function renderAlertPanel(){
@@ -2363,6 +2718,10 @@ function renderAlertPanel(){
   const dueSoonN = alertDueRequests('duesoon').length;
   if(overdueN) items.push({icon:'alert', color:'danger', label:`${overdueN} delivery(ies) OVERDUE`, nav:'overdue'});
   if(dueSoonN) items.push({icon:'clock', color:'warning', label:`${dueSoonN} delivery(ies) due within 3 days`, nav:'duesoon'});
+  const noProofN = proofMissingList().length;
+  if(noProofN) items.push({icon:'camera', color:'danger', label:`${noProofN} delivered request(s) without proof of deployment (more than ${proofGrace()} days)`, nav:'noproof'});
+  const proofRevN = session && session.role==='admin' ? proofReviewList().length : 0;
+  if(proofRevN) items.push({icon:'camera', color:'warning', label:`${proofRevN} proof(s) of deployment waiting for your review`, nav:'proofreview'});
   const low = alertLowStockList();
   if(low.length) items.push({icon:'box', color:'danger', label: low.groupCount>1
       ? `${low.length} low-stock item(s) across ${low.regionsAffected} region(s) — ${alertThreshold()} pcs or less in that region`
@@ -2456,6 +2815,7 @@ function renderDashboard(){
       {name:'Overdue Deliveries', rows:(ALERTS.overdueItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
       {name:'Due Soon (3 days)', rows:(ALERTS.dueSoonItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
       {name:'Low Stock (Reorder)', rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, Threshold:alertThreshold()}))},
+      {name:'No Proof of Deployment', rows:proofMissingList().map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Date Delivered':r.dateDelivered, 'Proof Status':proofStatusLabel(r)}))},
     ], 'Alerts-'+todayStr()+'.xlsx');
   });
   document.getElementById('btnExportActivity').addEventListener('click', ()=>{
@@ -2760,6 +3120,7 @@ function renderRequests(){
     {key:'for_sorting', label:'For Sorting', cls:'forsorting'},
     {key:'for_delivery', label:'For Delivery', cls:'fordelivery'},
     {key:'delivered', label:'Delivered', cls:'delivered'},
+    {key:'deployed', label:'Deployed', cls:'deployed'},
   ];
   const transfers = DATA.transfers.filter(t=> (whFilter==='all'||t.fromWarehouseId===whFilter||t.toWarehouseId===whFilter) && matchesBUFilter(t.posmCode));
   const html = `
@@ -2777,7 +3138,8 @@ function renderRequests(){
         const p = posmByCode(r.posmCode);
         return {'Request ID':r.id, 'POSM Code':r.posmCode, Description:p?p.desc:'', 'Business Unit':p?buLabel(p.bu):'',
           Qty:r.qty, Warehouse: whById(r.warehouseId)?whById(r.warehouseId).name:r.warehouseId, Store:r.store, 'Trade Supervisor':r.ts,
-          Purpose:r.purpose||'', Status:r.status, 'Date Created':r.dateCreated, 'Due Date':r.dueDate||'', 'Date Delivered':r.dateDelivered||'', 'Created By':r.createdBy||''};
+          Purpose:r.purpose||'', Status:isDeployed(r)?'deployed':r.status, 'Date Created':r.dateCreated, 'Due Date':r.dueDate||'', 'Date Delivered':r.dateDelivered||'', 'Created By':r.createdBy||'',
+          'Proof of Deployment':proofStatusLabel(r), 'Proof Uploaded By':(proofOf(r)||{}).uploadedBy||'', 'Proof Uploaded At':fmtDT((proofOf(r)||{}).uploadedAt), 'Proof Warnings':String((proofOf(r)||{}).flags||'').split(',').filter(Boolean).map(pkFlagLabel).join('; ')};
       });
       exportRowsToExcel(exportRows, 'Requests-'+todayStr()+'.xlsx', 'Requests');
     } else {
@@ -2796,7 +3158,9 @@ function renderRequests(){
     document.getElementById('reqViewRoot').innerHTML = `
       <div class="kanban">
         ${cols.map(c=>{
-          const items = reqs.filter(r=>r.status===c.key).sort((a,b)=>new Date(b.dateCreated)-new Date(a.dateCreated));
+          const items = reqs.filter(r=> c.key==='deployed' ? isDeployed(r) : c.key==='delivered' ? (r.status==='delivered' && !isDeployed(r)) : r.status===c.key)
+            .sort((a,b)=> c.key==='deployed' ? String((proofOf(b)||{}).uploadedAt).localeCompare(String((proofOf(a)||{}).uploadedAt))
+              : c.key==='delivered' ? String(b.dateDelivered||'').localeCompare(String(a.dateDelivered||'')) : new Date(b.dateCreated)-new Date(a.dateCreated));
           return `<div class="kanban-col"><div class="kanban-col-head"><h4><span class="badge ${c.cls}">${c.label}</span></h4><span class="kanban-count">${items.length}</span></div>
             ${items.slice(0,25).map(r=>{
               const p = posmByCode(r.posmCode);
@@ -2808,13 +3172,24 @@ function renderRequests(){
                 <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.dueDate?'Due '+fmtDateShort(r.dueDate):''}</span></div>
                 ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span style="display:inline-flex;align-items:center;gap:4px;">${icon('target',12)} ${r.purpose}</span></div>`:''}
                 ${r.createdBy?`<div class="kcard-meta" style="margin-top:2px;"><span>Created by ${r.createdBy}</span></div>`:''}
-                ${r.status!=='delivered' ? `<div class="kcard-actions"><button class="btn sm primary" data-advance="${r.id}" style="flex:1">${r.status==='for_sorting'?'Move to For Delivery':'Mark Delivered'}</button></div>` : `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span></div>`}
+                ${r.status!=='delivered' ? `<div class="kcard-actions"><button class="btn sm primary" data-advance="${r.id}" style="flex:1">${r.status==='for_sorting'?'Move to For Delivery':'Mark Delivered'}</button></div>`
+                  : c.key==='deployed' ? (()=>{ const pf = proofOf(r), nf = String(pf.flags||'').split(',').filter(Boolean).length;
+                      return `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span><span>Proof ${pf.uploadedAt?fmtDateShort(String(pf.uploadedAt).slice(0,10)):''}</span></div>
+                      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${proofChipHtml(r)}${nf?`<span class="badge obsolete" title="${escHtml(String(pf.flags).split(',').map(pkFlagLabel).join(' · '))}">${icon('alert',11)} ${nf} warning${nf!==1?'s':''}</span>`:''}</div>
+                      ${pf.uploadedBy?`<div class="kcard-meta" style="margin-top:2px;"><span>By ${escHtml(pf.uploadedBy)}</span></div>`:''}
+                      <div class="kcard-actions"><button class="btn sm ${pf.status==='for_review' && session && session.role==='admin'?'primary':''}" data-proof-view="${r.id}" style="flex:1">${icon('camera',12)} ${pf.status==='for_review' && session && session.role==='admin'?'Review proof':'View proof'}</button></div>`; })()
+                  : `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span></div>
+                     <div style="margin-top:6px;">${proofChipHtml(r)}</div>
+                     ${(proofOf(r)||{}).status==='rejected' && proofOf(r).rejectReason ? `<div class="kcard-meta" style="margin-top:2px;color:var(--danger);"><span>Reason: ${escHtml(proofOf(r).rejectReason)}</span></div>` : ''}
+                     <div class="kcard-actions">${(proofOf(r)||{}).status==='rejected' ? `<button class="btn sm" data-proof-view="${r.id}">View</button>` : ''}<button class="btn sm primary" data-proof-up="${r.id}" style="flex:1">${icon('camera',12)} Upload proof</button></div>`}
               </div>`;
             }).join('') || `<div class="empty-state">No requests here.</div>`}
           </div>`;
         }).join('')}
       </div>`;
     document.querySelectorAll('[data-advance]').forEach(b=>b.addEventListener('click',()=>advanceRequest(b.dataset.advance)));
+    document.querySelectorAll('[data-proof-up]').forEach(b=>b.addEventListener('click',()=>openProofUploadModal(b.dataset.proofUp)));
+    document.querySelectorAll('[data-proof-view]').forEach(b=>b.addEventListener('click',()=>openProofViewModal(b.dataset.proofView)));
   } else {
     document.getElementById('btnNewTrf').addEventListener('click', openNewTransferModal);
     document.getElementById('reqViewRoot').innerHTML = `
