@@ -563,6 +563,7 @@ body.mobile-app .scan-toast{bottom:calc(92px + env(safe-area-inset-bottom, 0px))
           </div>
           <div class="sm-group sm-advanced"><div class="sm-label">Advanced</div>
             <button class="sm-item" id="exportDataBtn" data-ico="download">Export raw data (JSON)</button>
+            <button class="sm-item sm-danger" id="replacePosmBtn" data-ico="upload" style="display:none;">Replace POSM list</button>
             <button class="sm-item sm-danger" id="resetDataBtn" data-ico="reset" style="display:none;">Reset test data</button>
           </div>
           <div id="appVersionInfo" class="sm-version"></div>
@@ -1406,6 +1407,8 @@ async function proceedAfterLogin(){
   if(alertSettingsBtn) alertSettingsBtn.style.display = (session.role==='admin') ? '' : 'none';
   const resetBtn = document.getElementById('resetDataBtn');
   if(resetBtn) resetBtn.style.display = (session.role==='admin') ? '' : 'none';
+  const replacePosmBtn = document.getElementById('replacePosmBtn');
+  if(replacePosmBtn) replacePosmBtn.style.display = (session.role==='admin') ? '' : 'none';
   renderWarehouseFilter(); renderDatalists();
   setSyncStatus('connecting');
   // Instant start: draw the last saved copy right away while the database loads.
@@ -5274,6 +5277,59 @@ function openResetTestDataModal(){
     }
   });
 }
+/* ============================= REPLACE POSM LIST (Admin, Google Sheets mode) =============================
+   Swaps the POSM list in the Google Sheet for the one in the posm-data-*.js files
+   (the latest inventory Excel). Beginning Stock and Current Stock both become the new count. */
+function openReplacePosmModal(){
+  if(!USE_DB){ alert('Connect the Google Sheet backend first.'); return; }
+  if(!session || session.role!=='admin'){ alert('Only an Admin can replace the POSM list.'); return; }
+  const current = (DATA_ALL && DATA_ALL.posmMaster) || DATA.posmMaster || [];
+  const curCodes = new Set(current.map(p=>String(p.code)));
+  const newCodes = new Set(REAL_ITEMS.map(i=>String(i.code)));
+  const added = [...newCodes].filter(c=>!curCodes.has(c));
+  const removed = [...curCodes].filter(c=>!newCodes.has(c));
+  const totalQty = REAL_ITEMS.reduce((s,i)=>s+ALL_WAREHOUSES.reduce((t,w)=>t+(Number(i.stock&&i.stock[w.id])||0),0),0);
+  const n = a => (a||[]).length;
+  const list = a => a.slice(0,10).map(escHtml).join(', ') + (a.length>10 ? ' …' : '');
+  openModal('Replace POSM list', `
+    <div class="notice" style="background:var(--danger-bg);color:var(--danger);margin-top:0;">${icon('alert',16)}<div>This <b>replaces the whole POSM list</b> in the Google Sheet with the latest list (<b>${REAL_ITEMS.length} POSM</b>, ${totalQty.toLocaleString()} pcs in total). Everyone will see the new list after a refresh.</div></div>
+    <div style="font-size:13px;line-height:1.7;margin:10px 0;">
+      • Now in the Sheet: <b>${curCodes.size}</b> POSM → after: <b>${newCodes.size}</b> POSM<br>
+      • New POSM: <b>${added.length}</b>${added.length?` <span style="color:var(--ink-faint);">(${list(added)})</span>`:''}<br>
+      • Removed POSM: <b>${removed.length}</b>${removed.length?` <span style="color:var(--ink-faint);">(${list(removed)})</span>`:''}<br>
+      • <b>Beginning Stock and Current Stock</b> of every warehouse become the new count<br>
+      <b style="color:var(--success);">Kept:</b> Requests, Trade Supervisors, Stores, Proof of Deployment, accounts and settings. POSM that stay keep their Active/Expired/Obsolete status.
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-bottom:10px;"><input type="checkbox" id="rpmClearHistory" checked style="margin-top:3px;">
+      <span>Also clear the Stock In / Stock Out and Transfer history (<b>${n(DATA.transactions)}</b> entries, <b>${n(DATA.transfers)}</b> transfers) so the numbers start fresh from this new count. <span style="color:var(--ink-faint);">Recommended: the old movements were already counted in the new Excel.</span></span></label>
+    <div class="field"><label>Type <b>REPLACE</b> to confirm</label><input id="rpmConfirm" autocomplete="off" placeholder="REPLACE"></div>
+    <div style="font-size:12px;color:var(--ink-faint);">A backup copy of the old tabs is saved as hidden "BACKUP" tabs in your Google Sheet.</div>
+  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="rpmSubmit" style="background:var(--danger);border-color:var(--danger);" disabled>Replace now</button>`);
+  const inp = document.getElementById('rpmConfirm'), btn = document.getElementById('rpmSubmit');
+  inp.addEventListener('input', ()=>{ btn.disabled = inp.value.trim()!=='REPLACE'; });
+  btn.addEventListener('click', async ()=>{
+    btn.disabled = true; btn.textContent = 'Replacing... (up to 1 minute)';
+    try{
+      const res = await postAction('replacePosmMaster', {
+        adminPassword: session.password, confirm:'REPLACE', performedBy: session.name,
+        clearHistory: document.getElementById('rpmClearHistory').checked,
+        posmItems: REAL_ITEMS.map(i=>({code:i.code, bu:i.bu, popType:i.popType, description:i.description, image:i.image||'', stock:i.stock})),
+        warehouses: ALL_WAREHOUSES.map(w=>({id:w.id}))
+      });
+      Object.keys(imageCache).forEach(k=>delete imageCache[k]);
+      closeModal();
+      await loadFromServer();
+      renderAll();
+      alert('Done! The POSM list now has '+res.posmCount+' POSM ('+res.added+' new, '+res.removed+' removed).'
+        + (res.clearedTxns||res.clearedTransfers ? '\n\nCleared '+res.clearedTxns+' stock entries and '+res.clearedTransfers+' transfers.' : '')
+        + '\n\nA backup was saved as hidden BACKUP tabs in the Google Sheet.');
+    }catch(e){
+      alert('Replace failed.\n\n' + (e.message||'Please try again.'));
+      btn.disabled = false; btn.textContent = 'Replace now';
+    }
+  });
+}
+document.getElementById('replacePosmBtn').addEventListener('click', openReplacePosmModal);
 document.getElementById('resetDataBtn').addEventListener('click', ()=>{
   if(USE_DB){ openResetTestDataModal(); return; }
   if(confirm('Reset back to the original baseline data (all manual entries will be lost)?')){
