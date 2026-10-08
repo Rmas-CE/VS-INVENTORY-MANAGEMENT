@@ -347,10 +347,11 @@ body.mobile-app #btnOnePager{padding:7px 9px;}
 .lbl-bars svg{width:100%;display:block;}
 .lbl-code{font-weight:800;letter-spacing:.06em;margin-top:.8mm;}
 .lbl-desc{color:#222;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:.5mm;}
+.lbl-model{color:#000;font-weight:700;overflow:hidden;line-height:1.15;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;word-break:break-word;}
 .lbl-bu{color:#555;margin-top:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.lbl.sm{width:48mm;height:28mm;} .lbl.sm .lbl-bars svg{height:13mm;} .lbl.sm .lbl-code{font-size:8.5pt;} .lbl.sm .lbl-desc{font-size:5.5pt;} .lbl.sm .lbl-bu{font-size:5pt;}
-.lbl.md{width:63mm;height:38mm;} .lbl.md .lbl-bars svg{height:18mm;} .lbl.md .lbl-code{font-size:11pt;} .lbl.md .lbl-desc{font-size:6.5pt;} .lbl.md .lbl-bu{font-size:6pt;}
-.lbl.lg{width:95mm;height:55mm;} .lbl.lg .lbl-bars svg{height:27mm;} .lbl.lg .lbl-code{font-size:15pt;} .lbl.lg .lbl-desc{font-size:8.5pt;} .lbl.lg .lbl-bu{font-size:7.5pt;}
+.lbl.sm{width:48mm;height:28mm;} .lbl.sm .lbl-bars svg{height:11mm;} .lbl.sm .lbl-model{font-size:5.5pt;} .lbl.sm .lbl-code{font-size:8.5pt;} .lbl.sm .lbl-desc{font-size:5.5pt;} .lbl.sm .lbl-bu{font-size:5pt;}
+.lbl.md{width:63mm;height:38mm;} .lbl.md .lbl-bars svg{height:16mm;} .lbl.md .lbl-model{font-size:6.5pt;} .lbl.md .lbl-code{font-size:11pt;} .lbl.md .lbl-desc{font-size:6.5pt;} .lbl.md .lbl-bu{font-size:6pt;}
+.lbl.lg{width:95mm;height:55mm;} .lbl.lg .lbl-bars svg{height:25mm;} .lbl.lg .lbl-model{font-size:8.5pt;} .lbl.lg .lbl-code{font-size:15pt;} .lbl.lg .lbl-desc{font-size:8.5pt;} .lbl.lg .lbl-bu{font-size:7.5pt;}
 .geo-status{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--surface-alt);font-size:12.5px;color:var(--ink-soft);flex-wrap:wrap;}
 .geo-status > span{flex:1;min-width:150px;}
 .geo-status.ok{background:var(--success-bg);color:var(--success);border-color:transparent;font-weight:600;}
@@ -4837,7 +4838,7 @@ function barcodeSvg(text){
 }
 function escHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function labelHtml(p, size){
-  return `<div class="lbl ${size}"><div class="lbl-bars">${barcodeSvg(p.code)}</div><div class="lbl-code">${escHtml(p.code)}</div><div class="lbl-desc">${escHtml(p.desc||p.type||'')}</div><div class="lbl-bu">${escHtml(buLabel(p.bu))}${p.type?' · '+escHtml(p.type):''}</div></div>`;
+  return `<div class="lbl ${size}"><div class="lbl-bars">${barcodeSvg(p.code)}</div><div class="lbl-code">${escHtml(p.code)}</div><div class="lbl-desc">${escHtml(p.desc||p.type||'')}</div>${p.model?`<div class="lbl-model">Model: ${escHtml(p.model)}</div>`:''}<div class="lbl-bu">${escHtml(buLabel(p.bu))}${p.type?' · '+escHtml(p.type):''}</div></div>`;
 }
 function printLabels(codes, copies, size){
   const items = codes.map(c=>posmByCode(c)).filter(Boolean);
@@ -4854,7 +4855,7 @@ function printLabels(codes, copies, size){
 function openQrModal(code){
   const p = posmByCode(code); if(!p) return;
   openModal('POSM Barcode', `
-    <div class="bc-big"><div class="bc-bars">${barcodeSvg(p.code)}</div><div style="font-weight:800;font-size:18px;font-family:Arial,sans-serif;letter-spacing:.04em;">${escHtml(p.code)}</div><div style="font-size:12px;text-align:center;color:#333;">${escHtml(p.desc)}</div></div>
+    <div class="bc-big"><div class="bc-bars">${barcodeSvg(p.code)}</div><div style="font-weight:800;font-size:18px;font-family:Arial,sans-serif;letter-spacing:.04em;">${escHtml(p.code)}</div><div style="font-size:12px;text-align:center;color:#333;">${escHtml(p.desc)}</div>${p.model?`<div style="font-size:12px;text-align:center;font-weight:700;color:#000;">Model: ${escHtml(p.model)}</div>`:''}</div>
     <div class="two-col">
       <div class="field"><label>Copies</label><input type="number" id="qrCopies" min="1" max="200" value="1"></div>
       <div class="field"><label>Label size</label><select id="qrSize"><option value="sm">Small (48×28mm)</option><option value="md" selected>Medium (63×38mm)</option><option value="lg">Large (95×55mm)</option></select></div>
