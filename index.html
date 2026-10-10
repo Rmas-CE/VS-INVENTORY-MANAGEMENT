@@ -1672,7 +1672,7 @@ async function performAction(targetAction, payload, opts){
       // Pull a fresh copy in the background so server-side totals (and filtered views) catch up.
       if(patched) loadFromServer(true).catch(()=>{});
     }
-    return {applied:true};
+    return {applied:true, result};
   } else {
     const subResult = await postAction('submitPending', {targetAction, payload: withAttribution, submittedBy: session.name, region: session.region, regionPassword: session.password});
     if(!opts.silent){
@@ -2745,7 +2745,12 @@ function openStockOutModal(prefillCode, prefillReasonDispose){
         });
       }
       closeModal();
-      if(res && res.applied===false) notifyIfPending(res); else showToast(`Saved Stock Out: ${items.length} POSM · ${total.toLocaleString()} pcs`);
+      if(res && res.applied===false) notifyIfPending(res);
+      else if(!(res && res.result && res.result.photoSaved)){
+        // An older Code.gs drops the Stock Out photo (it only kept Stock In receipts).
+        alert('The Stock Out was saved, but the proof photo was NOT kept by Google Sheets.\n\nThe Apps Script (Code.gs) is still the old version. Paste the new Code.gs, then Deploy → Manage deployments → Edit → Version: New version → Deploy.');
+      }
+      else showToast(`Saved Stock Out: ${items.length} POSM · ${total.toLocaleString()} pcs (with proof photo)`);
     }catch(e){
       alert(e && e.geo ? e.message : ('Could not save the stock out.\n\n' + ((e && e.message) || 'Please try again.')));
       saving = false; refreshBtn();
@@ -5994,7 +5999,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.11-v20';
+const APP_VERSION = '2026.10.11-v21';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
