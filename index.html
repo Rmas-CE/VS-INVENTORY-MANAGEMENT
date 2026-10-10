@@ -2932,12 +2932,12 @@ function openAlertDetail(kind){
                    : `Active POSM with <b>${th} pcs or less</b> in <b>${escHtml(list.length ? list[0].where : '')}</b>`)
           + `${out?` — <b style="color:var(--danger);">${out} are out of stock</b>`:''}. Lowest first.`;
     table = `<table class="inv-table"><thead><tr><th>POSM</th><th>BU</th><th>Low in</th><th style="text-align:right;">Qty left</th><th>Where the stock is (all warehouses)</th></tr></thead><tbody>
-      ${list.map(x=>`<tr><td><div class="row-flex">${tile(x.p,30)}<div><div class="cell-main">${x.p.code}</div><div class="cell-sub">${x.p.desc}</div></div></div></td>
+      ${list.map(x=>`<tr><td><div class="row-flex">${tile(x.p,30)}<div><div class="cell-main">${x.p.code}</div><div class="cell-sub">${x.p.desc}</div>${modelHtml(x.p)}</div></div></td>
         <td>${buLabel(x.p.bu)}</td><td style="white-space:nowrap;font-weight:600;">${escHtml(x.where)}</td>
         <td style="text-align:right;"><span class="badge ${x.qty<=0?'expired':'obsolete'}">${x.qty<=0?'Out of stock':x.qty.toLocaleString()+' pcs'}</span></td>
         <td style="font-size:12px;white-space:normal;min-width:240px;line-height:1.5;">${stockWhere(x.p.code)}</td></tr>`).join('')}
       </tbody></table>`;
-    exportRows = list.map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Type:x.p.type, 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, 'Reorder Level':th,
+    exportRows = list.map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', Type:x.p.type, 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, 'Reorder Level':th,
       'Per Warehouse': DATA.inventory.filter(r=>r.posmCode===x.p.code && r.qty>0).map(r=>((whById(r.warehouseId)||{}).name||r.warehouseId)+': '+r.qty).join(', ')}));
     exportName = 'Low-Stock';
     loadImagesFor(list.slice(0,60).map(x=>x.p.code));
@@ -2953,7 +2953,7 @@ function openAlertDetail(kind){
           <td><div>${r.store}</div><div class="cell-sub">${r.ts||''}</div></td><td class="cell-sub">${w?w.name:r.warehouseId}</td>
           <td><div style="white-space:nowrap;">${fmtDate(r.dueDate)}</div>${tag}</td></tr>`; }).join('')}
       </tbody></table>`;
-    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Due Date':r.dueDate}));
+    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Model:(posmByCode(r.posmCode)||{}).model||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Due Date':r.dueDate}));
     exportName = kind==='overdue' ? 'Overdue-Deliveries' : 'Due-Soon-Deliveries';
     goBtn = `<button class="btn" id="alGo" data-go="requests">Open Requests board</button>`;
   } else if(kind==='noproof'){
@@ -2967,7 +2967,7 @@ function openAlertDetail(kind){
           <td><div style="white-space:nowrap;">${fmtDate(r.dateDelivered)}</div><span class="badge expired">${pf&&pf.status==='rejected'?'Rejected · ':''}${d} days</span></td>
           <td><button class="btn sm primary" data-al-proof-up="${r.id}">${icon('camera',12)} Upload</button></td></tr>`; }).join('')}
       </tbody></table>`;
-    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Date Delivered':r.dateDelivered, 'Days Since Delivery':daysSinceDate(r.dateDelivered), 'Proof Status':proofStatusLabel(r)}));
+    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Model:(posmByCode(r.posmCode)||{}).model||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Date Delivered':r.dateDelivered, 'Days Since Delivery':daysSinceDate(r.dateDelivered), 'Proof Status':proofStatusLabel(r)}));
     exportName = 'No-Proof-of-Deployment';
     goBtn = `<button class="btn" id="alGo" data-go="requests">Open Requests board</button>`;
   } else if(kind==='proofreview'){
@@ -3112,7 +3112,7 @@ function renderDashboard(){
       {name:'Pending Approvals', rows:(ALERTS.pendingItems||[]).map(p=>({ID:p.id, Action:p.action, 'Submitted By':p.submittedBy, 'Submitted At':p.submittedAt}))},
       {name:'Overdue Deliveries', rows:(ALERTS.overdueItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
       {name:'Due Soon (3 days)', rows:(ALERTS.dueSoonItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
-      {name:'Low Stock (Reorder)', rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, Threshold:alertThreshold()}))},
+      {name:'Low Stock (Reorder)', rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, Threshold:alertThreshold()}))},
       {name:'No Proof of Deployment', rows:proofMissingList().map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Date Delivered':r.dateDelivered, 'Proof Status':proofStatusLabel(r)}))},
     ], 'Alerts-'+todayStr()+'.xlsx');
   });
