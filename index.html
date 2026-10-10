@@ -161,8 +161,8 @@ body.mobile-app .settings-menu{position:static;box-shadow:none;margin-bottom:8px
 .kpi-delta{font-size:11.5px;margin-top:4px;font-weight:600;}
 .kpi-delta.up{color:var(--success);} .kpi-delta.down{color:var(--danger);} .kpi-delta.flat{color:var(--ink-faint);}
 .section-row{display:grid;gap:16px;margin-bottom:18px;}
-.cols-2{grid-template-columns:1.3fr 1fr;} .cols-3{grid-template-columns:repeat(3,1fr);}
-@media(max-width:980px){.cols-2,.cols-3{grid-template-columns:1fr;}}
+.cols-2{grid-template-columns:1.3fr 1fr;}
+@media(max-width:980px){.cols-2{grid-template-columns:1fr;}}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow);}
 .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap;}
 .panel-head h3{font-size:14.5px;} .panel-sub{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
@@ -254,8 +254,6 @@ body.region-user .admin-only{display:none !important;}
 .leave-why{display:flex;gap:6px;align-items:flex-start;text-align:left;background:var(--warning-bg);color:var(--warning);border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:12px;}
 .leave-actions{display:flex;flex-direction:column;gap:8px;}
 .leave-actions .btn{justify-content:center;width:100%;}
-.pp-sel{display:none;align-items:center;gap:10px;padding:9px 11px;margin-bottom:8px;border-radius:var(--radius-sm);background:var(--primary-tint);border:1px solid color-mix(in srgb, var(--primary) 35%, transparent);}
-.pp-sel.show{display:flex;}
 .pp-list{max-height:280px;overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);}
 .pp-row{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:none;border-bottom:1px solid var(--line);background:none;text-align:left;color:var(--ink);font-family:var(--font-ui);cursor:pointer;}
 .pp-row:last-child{border-bottom:none;}
@@ -280,7 +278,6 @@ body.region-user .admin-only{display:none !important;}
 body.mobile-app #btnOnePager .op-label{display:none;}
 @media (max-width:1320px){ #btnOnePager .op-label{display:none;} #btnOnePager{padding:7px 9px;} }
 body.mobile-app #btnOnePager{padding:7px 9px;}
-.dash-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;}
 .xl-pair{display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;}
 .kpi-click{cursor:pointer;transition:transform .12s, box-shadow .12s;}
 .kpi-click:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(21,80,230,.14);}
@@ -320,12 +317,12 @@ body.mobile-app #btnOnePager{padding:7px 9px;}
   .kanban{grid-template-columns:1fr;}
   .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
   .kpi-value{font-size:22px;} .kpi-card{padding:13px 14px;}
-  .cols-2, .cols-3{grid-template-columns:1fr !important;}
+  .cols-2{grid-template-columns:1fr !important;}
   .two-col{grid-template-columns:1fr;}
   .modal-backdrop{padding:0;align-items:flex-end;}
   .modal{max-width:100%;width:100%;border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-height:92vh;}
   .modal-body{padding:16px;} .modal-head{padding:14px 16px;}
-  .field input, .field select, .field textarea, .wh-row select, .status-select{font-size:16px;padding:10px 12px;}
+  .field input, .field select, .field textarea, .status-select{font-size:16px;padding:10px 12px;}
   .btn{min-height:38px;} .btn.sm{min-height:32px;}
   .inv-grid{grid-template-columns:repeat(2,1fr);gap:9px;}
   table{font-size:11.8px;}
@@ -397,7 +394,6 @@ body.mobile-app #btnOnePager{padding:7px 9px;}
 .tabbar, .sheet, .sheet-backdrop, .install-banner{display:none;}
 body.mobile-app{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none;background:var(--bg);}
 body.mobile-app .m-only{display:inline-flex !important;}
-body.mobile-app .d-only{display:none !important;}
 body.mobile-app button, body.mobile-app .nav-item, body.mobile-app .tab{-webkit-user-select:none;user-select:none;touch-action:manipulation;}
 body.mobile-app .hamburger{display:none !important;}
 body.mobile-app .topbar{padding:calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;gap:10px;border-bottom:1px solid var(--line);background:color-mix(in srgb, var(--surface) 92%, transparent);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);z-index:20;}
@@ -483,7 +479,7 @@ body.mobile-app .filters select{flex:1 1 auto;min-width:0;font-size:15px;}
 body.mobile-app .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:10px;}
 body.mobile-app .kpi-value{font-size:24px;} body.mobile-app .kpi-card{padding:14px;}
 body.mobile-app .kpi-label{font-size:12.5px;}
-body.mobile-app .cols-2, body.mobile-app .cols-3, body.mobile-app .kanban{grid-template-columns:1fr !important;}
+body.mobile-app .cols-2, body.mobile-app .kanban{grid-template-columns:1fr !important;}
 body.mobile-app .two-col{grid-template-columns:1fr !important;}
 body.mobile-app .modal-backdrop{padding:0;align-items:flex-end;}
 body.mobile-app .modal{max-width:100% !important;width:100%;border-radius:22px 22px 0 0;max-height:92vh;padding-bottom:env(safe-area-inset-bottom, 0px);}
@@ -743,14 +739,12 @@ const ICONS = {
   wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   target:'<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
   store:'<path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-  trend:'<path d="M3 17l6-6 4 4 8-8M15 7h6v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7" cy="17.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="17.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   info:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 11v6M12 7.5h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   chevron:'<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   grid:'<rect x="4" y="4" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="13" y="4" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="13" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-  qr:'<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.5 6.5h1v1h-1zM16.5 6.5h1v1h-1zM6.5 16.5h1v1h-1zM14 14h2v2h-2zM18 14h2v2h-2zM16 16h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" fill="currentColor"/>',
 };
 function fillStaticIcons(root){
   (root||document).querySelectorAll('[data-ico]').forEach(el=>{
@@ -1543,12 +1537,6 @@ function applyLocalUpdate(action, payload, result){
       });
       return true;
     }
-    case 'newPosm': {
-      if(!DATA.posmMaster.find(p=>p.code===payload.code)){
-        DATA.posmMaster.push({code:payload.code, desc:payload.desc, type:payload.type, bu:payload.bu, status:'active'});
-      }
-      return true;
-    }
     case 'newTransfer': {
       DATA.transfers.unshift({id:payload.id, posmCode:payload.posmCode, qty:Number(payload.qty), fromWarehouseId:payload.fromWarehouseId, toWarehouseId:payload.toWarehouseId, status:'pending', dateCreated:payload.dateCreated, dateCompleted:''});
       return true;
@@ -1647,7 +1635,7 @@ document.addEventListener('visibilitychange', ()=>{
 
 /* ---- Generic action performer: applies directly if Admin, else routes
    through the pending-approval queue if a regular User ---- */
-const ADMIN_ONLY_ACTIONS = ['newPosm','changeStatus','newTS','editTS','deleteTS','newStore','editStore','deleteStore'];
+const ADMIN_ONLY_ACTIONS = ['changeStatus','newTS','editTS','deleteTS','newStore','editStore','deleteStore'];
 async function performAction(targetAction, payload, opts){
   opts = opts || {};
   if(isRegionUser() && (ADMIN_ONLY_ACTIONS.includes(targetAction) || (payload && payload.isNew))){
@@ -2909,6 +2897,11 @@ function alertLowStockList(){
   out.regionsAffected = new Set(out.map(x=>x.where)).size;
   return out;
 }
+function alertSortingList(){
+  const whF = currentFilterWarehouse();
+  return DATA.requests.filter(r=> r.status==='for_sorting' && (whF==='all' || r.warehouseId===whF) && matchesBUFilter(r.posmCode))
+    .sort((a,b)=>String(a.dateCreated).localeCompare(String(b.dateCreated)));
+}
 function alertDueRequests(kind){
   const today = todayStr(), in3 = addDays(today, 3), whF = currentFilterWarehouse();
   return DATA.requests.filter(r=> r.status==='for_delivery' && r.dueDate && (whF==='all' || r.warehouseId===whF) &&
@@ -2941,6 +2934,19 @@ function openAlertDetail(kind){
       'Per Warehouse': DATA.inventory.filter(r=>r.posmCode===x.p.code && r.qty>0).map(r=>((whById(r.warehouseId)||{}).name||r.warehouseId)+': '+r.qty).join(', ')}));
     exportName = 'Low-Stock';
     loadImagesFor(list.slice(0,60).map(x=>x.p.code));
+  } else if(kind==='sorting'){
+    const list = alertSortingList();
+    title = `Waiting for Sorting — ${list.length}`;
+    intro = 'New requests still in <b>For Sorting</b>. Oldest first.';
+    table = `<table class="inv-table"><thead><tr><th>Request</th><th>POSM</th><th>Store / TS</th><th>Warehouse</th><th>Requested</th></tr></thead><tbody>
+      ${list.map(r=>{ const p = posmByCode(r.posmCode), w = whById(r.warehouseId), d = daysSinceDate(r.dateCreated);
+        return `<tr><td class="cell-sub">${r.id}</td><td><div class="cell-main">${r.posmCode} × ${r.qty}</div><div class="cell-sub">${p?p.desc:''}</div>${modelHtml(p)}</td>
+          <td><div>${r.store}</div><div class="cell-sub">${r.ts||''}</div></td><td class="cell-sub">${w?w.name:r.warehouseId}</td>
+          <td><div style="white-space:nowrap;">${fmtDate(r.dateCreated)}</div><span class="badge ${d>2?'obsolete':'pending'}">${d===0?'Today':d+' day'+(d!==1?'s':'')+' ago'}</span></td></tr>`; }).join('')}
+      </tbody></table>`;
+    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Model:(posmByCode(r.posmCode)||{}).model||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Date Requested':r.dateCreated}));
+    exportName = 'Waiting-For-Sorting';
+    goBtn = `<button class="btn" id="alGo" data-go="requests">Open Requests board</button>`;
   } else if(kind==='overdue' || kind==='duesoon'){
     const list = alertDueRequests(kind), today = todayStr();
     title = kind==='overdue' ? `Overdue Deliveries — ${list.length}` : `Due Within 3 Days — ${list.length}`;
@@ -3008,8 +3014,10 @@ function openAlertDetail(kind){
 }
 function renderAlertPanel(){
   if(!ALERTS) return '';
-  const items = [];
-  if(ALERTS.pendingCount && session && session.role==='admin') items.push({icon:'clock', color:'warning', label:`${ALERTS.pendingCount} ${vsPl(ALERTS.pendingCount,'action','actions')} awaiting approval`, nav:'pendingList'});
+  const items = [], isAdmin = !!(session && session.role==='admin');
+  const sortN = alertSortingList().length;
+  if(sortN) items.push({icon:'requests', color:'warning', label:`${sortN} ${vsPl(sortN,'request','requests')} waiting for sorting`, nav:'sorting'});
+  if(ALERTS.pendingCount && isAdmin) items.push({icon:'clock', color:'warning', label:`${ALERTS.pendingCount} ${vsPl(ALERTS.pendingCount,'action','actions')} awaiting approval`, nav:'pendingList'});
   // Counted from the full data of the current view (region / BU / warehouse), so the number
   // always matches the list that opens when the alert is clicked.
   const overdueN = alertDueRequests('overdue').length;
@@ -3018,14 +3026,14 @@ function renderAlertPanel(){
   if(dueSoonN) items.push({icon:'clock', color:'warning', label:`${dueSoonN} ${vsPl(dueSoonN,'delivery','deliveries')} due within 3 days`, nav:'duesoon'});
   const noProofN = proofMissingList().length;
   if(noProofN) items.push({icon:'camera', color:'danger', label:`${noProofN} delivered ${vsPl(noProofN,'request','requests')} without proof of deployment (more than ${proofGrace()} days)`, nav:'noproof'});
-  const proofRevN = session && session.role==='admin' ? proofReviewList().length : 0;
-  if(proofRevN) items.push({icon:'camera', color:'warning', label:`${proofRevN} ${vsPl(proofRevN,'proof','proofs')} of deployment waiting for your review`, nav:'proofreview'});
-  const low = alertLowStockList();
+  const proofRevN = proofReviewList().length;
+  if(proofRevN) items.push({icon:'camera', color:'warning', label: isAdmin ? `${proofRevN} ${vsPl(proofRevN,'proof','proofs')} of deployment waiting for your review` : `${proofRevN} deployed ${vsPl(proofRevN,'request','requests')} waiting for Admin to verify the proof`, nav:'proofreview'});
+  const low = isAdmin ? alertLowStockList() : [];
   if(low.length) items.push({icon:'box', color:'danger', label: low.groupCount>1
       ? `${low.length} low-stock ${vsPl(low.length,'item','items')} across ${low.regionsAffected} ${vsPl(low.regionsAffected,'region','regions')} — ${alertThreshold()} pcs or less in that region`
       : `${low.length} POSM ${vsPl(low.length,'item','items')} at or below ${alertThreshold()} units — consider reordering`, nav:'lowstock'});
   if(!items.length){
-    return `<div class="notice" style="background:var(--success-bg);border-color:color-mix(in srgb, var(--success) 30%, transparent);color:var(--success);">${icon('check',16)}<div><b>All clear</b> — no pending approvals, overdue deliveries, or low-stock items right now.</div></div>`;
+    return `<div class="notice" style="background:var(--success-bg);border-color:color-mix(in srgb, var(--success) 30%, transparent);color:var(--success);">${icon('check',16)}<div><b>All clear</b> — ${isAdmin ? 'no pending approvals, requests, overdue deliveries, missing proofs or low-stock items right now.' : 'no pending requests, deliveries or proofs right now.'}</div></div>`;
   }
   return `
     <div class="panel" style="margin-bottom:16px;">
@@ -3108,13 +3116,20 @@ function renderDashboard(){
   const exportAlertsBtn = document.getElementById('btnExportAlerts');
   if(exportAlertsBtn) exportAlertsBtn.addEventListener('click', ()=>{
     if(!ALERTS) return;
-    exportSheetsToExcel([
-      {name:'Pending Approvals', rows:(ALERTS.pendingItems||[]).map(p=>({ID:p.id, Action:p.action, 'Submitted By':p.submittedBy, 'Submitted At':p.submittedAt}))},
-      {name:'Overdue Deliveries', rows:(ALERTS.overdueItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
-      {name:'Due Soon (3 days)', rows:(ALERTS.dueSoonItems||[]).map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate}))},
-      {name:'Low Stock (Reorder)', rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, Threshold:alertThreshold()}))},
-      {name:'No Proof of Deployment', rows:proofMissingList().map(r=>({ID:r.id, 'POSM Code':r.posmCode, Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, 'Date Delivered':r.dateDelivered, 'Proof Status':proofStatusLabel(r)}))},
-    ], 'Alerts-'+todayStr()+'.xlsx');
+    const isAdmin = session && session.role==='admin';
+    const reqRow = (r, extra)=>Object.assign({ID:r.id, 'POSM Code':r.posmCode, Model:(posmByCode(r.posmCode)||{}).model||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts}, extra);
+    const sheets = [
+      {name:'Waiting for Sorting', rows:alertSortingList().map(r=>reqRow(r, {'Date Requested':r.dateCreated}))},
+      {name:'Overdue Deliveries', rows:alertDueRequests('overdue').map(r=>reqRow(r, {'Due Date':r.dueDate}))},
+      {name:'Due Soon (3 days)', rows:alertDueRequests('duesoon').map(r=>reqRow(r, {'Due Date':r.dueDate}))},
+      {name:'No Proof of Deployment', rows:proofMissingList().map(r=>reqRow(r, {'Date Delivered':r.dateDelivered, 'Proof Status':proofStatusLabel(r)}))},
+      {name:'Proof for Review', rows:proofReviewList().map(d=>({'Proof ID':d.groupId||d.id, Store:d.store, 'Uploaded By':d.uploadedBy, 'Uploaded At':fmtDT(d.uploadedAt)}))},
+    ];
+    if(isAdmin){
+      sheets.unshift({name:'Pending Approvals', rows:(DATA.pendingActions||[]).filter(x=>x.status==='pending').map(x=>({ID:x.id, Action:pendingActionTypeLabel(x.action), Details:describePendingAction(x), 'Submitted By':x.submittedBy, 'Submitted At':x.submittedAt}))});
+      sheets.push({name:'Low Stock (Reorder)', rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, Threshold:alertThreshold()}))});
+    }
+    exportSheetsToExcel(sheets, 'Alerts-'+todayStr()+'.xlsx');
   });
   document.getElementById('btnExportActivity').addEventListener('click', ()=>{
     const all = buildActivityFeed();
@@ -3340,8 +3355,10 @@ async function openTxnReceipt(t){
   const m = String(t.ref||'').match(/(?:SCAN|BATCH)-[A-Z0-9]+/);
   const local = m ? DATA.transactions.find(x=>x.receiptImage && String(x.ref||'').includes(m[0])) : null;
   if(local){ openReceiptLightbox(local.receiptImage, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')'); return; }
+  // In a batch the photo is stored on the batch row that carries it, not on every POSM row.
+  const owner = t.hasReceipt ? t : ((m && DATA.transactions.find(x=>x.hasReceipt && String(x.ref||'').includes(m[0]))) || t);
   try{
-    const res = await postAction('getReceipt', Object.assign({id: t.id}, readCreds()));
+    const res = await postAction('getReceipt', Object.assign({id: owner.id}, readCreds()));
     if(res.image) openReceiptLightbox(res.image, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')');
     else alert('No receipt photo found for this entry.');
   }catch(e){ alert(e.message || 'Could not load the receipt photo.'); }
@@ -5875,7 +5892,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.10-v12';
+const APP_VERSION = '2026.10.10-v14';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
