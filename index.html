@@ -224,6 +224,8 @@ body.mobile-app .kcol-scroll{max-height:calc(var(--vh) * 72);}
 .kcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow);}
 .kcard-top{display:flex;justify-content:space-between;gap:6px;} .kcard-code{font-weight:700;font-size:12.5px;}
 .kcard-desc{font-size:11.5px;color:var(--ink-soft);margin-top:3px;}
+.kcard.opening{border-left:4px solid #E8A317;background:linear-gradient(90deg,#FFF6E3 0,var(--surface) 70%);}
+.badge.opening{background:#FFF0CC;color:#8A5A00;border:1px solid #F3D9A4;}
 .ts-group{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px;margin-bottom:10px;}
 .ts-group .kcard{box-shadow:none;}
 .ts-group .kcard:last-child{margin-bottom:0;}
@@ -3071,8 +3073,8 @@ function renderDashboard(){
   const totalStock = invRows.reduce((s,r)=>s+r.qty,0);
   const totalBeginning = invRows.reduce((s,r)=>s+r.beginningStock,0);
   // Only expired/obsolete POSM that still have stock (zero-qty ones are left out).
-  const disposeItems = DATA.posmMaster.filter(p=>(p.status==='expired'||p.status==='obsolete') && disposalRelevant(p, whFilter) && (buFilter==='all'||p.bu===buFilter));
-  const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && (p.status==='expired'||p.status==='obsolete') && (whFilter==='all'||r.warehouseId===whFilter) && (buFilter==='all'||p.bu===buFilter);}).reduce((s,r)=>s+r.qty,0);
+  const disposeItems = DATA.posmMaster.filter(p=>p.status==='obsolete' && disposalRelevant(p, whFilter) && (buFilter==='all'||p.bu===buFilter));
+  const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && p.status==='obsolete' && (whFilter==='all'||r.warehouseId===whFilter) && (buFilter==='all'||p.bu===buFilter);}).reduce((s,r)=>s+r.qty,0);
   const pendingReq = DATA.requests.filter(r=>(r.status==='for_sorting'||r.status==='for_delivery') && (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
   const deliveredThisWeek = DATA.requests.filter(r=>r.status==='delivered' && r.dateDelivered && new Date(r.dateDelivered) >= new Date(Date.now()-7*86400000) && (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
   const deltaVsBeginning = totalBeginning ? ((totalStock-totalBeginning)/totalBeginning*100) : 0;
@@ -3083,7 +3085,7 @@ function renderDashboard(){
       <div class="kpi-card kpi-click" data-kpi-go="stock" title="Open inventory"><div class="kpi-top"><span class="kpi-label">Total POSM Stock</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('inventory',16)}</div></div>
         <div class="kpi-value">${totalStock.toLocaleString()}</div><div class="kpi-delta ${deltaVsBeginning>=0?'up':'down'}">${deltaVsBeginning>=0?'+':''}${deltaVsBeginning.toFixed(1)}% vs beginning stock</div></div>
       <div class="kpi-card kpi-click" data-kpi-go="disposal" title="Open items for disposal"><div class="kpi-top"><span class="kpi-label">For Disposal</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('trash',16)}</div></div>
-        <div class="kpi-value">${disposeQty.toLocaleString()}</div><div class="kpi-delta ${disposeItems.length?'down':'flat'}">${disposeItems.length} POSM ${vsPl(disposeItems.length,'type')} marked expired/obsolete</div></div>
+        <div class="kpi-value">${disposeQty.toLocaleString()}</div><div class="kpi-delta ${disposeItems.length?'down':'flat'}">${disposeItems.length} obsolete POSM ${vsPl(disposeItems.length,'type')}</div></div>
       <div class="kpi-card kpi-click" data-kpi-go="pendingreq" title="Open requests"><div class="kpi-top"><span class="kpi-label">Pending Requests</span><div class="kpi-icon" style="background:var(--warning-bg);color:var(--warning)">${icon('requests',16)}</div></div>
         <div class="kpi-value">${pendingReq.length}</div><div class="kpi-delta flat">For Sorting + For Delivery</div></div>
       <div class="kpi-card kpi-click" data-kpi-go="delivered" title="Open delivery metrics"><div class="kpi-top"><span class="kpi-label">Delivered (7 days)</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('check',16)}</div></div>
@@ -3098,9 +3100,9 @@ function renderDashboard(){
     <div class="section-row cols-2">
       <div class="panel"><div class="panel-head"><div><h3>Weekly Delivery Trend</h3><div class="panel-sub">Delivered requests, last 8 weeks</div></div></div>
         <div class="chart-wrap"><canvas id="chartWeeklyTrend"></canvas></div></div>
-      <div class="panel"><div class="panel-head"><div><h3>Items Needing Disposal</h3><div class="panel-sub">Expired and obsolete POSM${disposeItems.length?` · ${disposeItems.length} item${disposeItems.length!==1?'s':''}`:''}</div></div><button class="btn sm" data-nav-to="inventory">View all →</button></div>
+      <div class="panel"><div class="panel-head"><div><h3>Items Needing Disposal</h3><div class="panel-sub">Obsolete POSM${disposeItems.length?` · ${disposeItems.length} item${disposeItems.length!==1?'s':''}`:''}</div></div><div class="panel-actions"><button class="btn sm" id="btnExportDisposal" title="Download obsolete POSM for disposal">${icon('download',13)} Excel</button><button class="btn sm" data-nav-to="inventory">View all →</button></div></div>
         <div class="table-wrap dispose-scroll"><table><thead><tr><th>POSM</th><th>Status</th><th>Total Qty</th></tr></thead><tbody>
-          ${disposeItems.slice().sort((a,b)=>totalQtyForPosm(b.code,whFilter)-totalQtyForPosm(a.code,whFilter)).map(p=>`<tr><td><div class="row-flex">${tile(p,28)}<div><div class="cell-main">${p.code}</div><div class="cell-sub">${p.desc}</div></div></div></td><td>${statusBadge(p.status)}</td><td class="qty-strong">${totalQtyForPosm(p.code,whFilter)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty-state">No items are marked for disposal. Use the status selector in Full Inventory to mark expired/obsolete items.</td></tr>'}
+          ${disposeItems.slice().sort((a,b)=>totalQtyForPosm(b.code,whFilter)-totalQtyForPosm(a.code,whFilter)).map(p=>`<tr><td><div class="row-flex">${tile(p,28)}<div><div class="cell-main">${p.code}</div><div class="cell-sub">${p.desc}</div></div></div></td><td>${statusBadge(p.status)}</td><td class="qty-strong">${totalQtyForPosm(p.code,whFilter)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty-state">No obsolete POSM with stock. Use the status selector in Full Inventory to mark items as Obsolete.</td></tr>'}
         </tbody></table></div>
       </div>
     </div>
@@ -3123,10 +3125,22 @@ function renderDashboard(){
     renderActivityFeed();
   }));
   document.querySelectorAll('[data-nav-to]').forEach(b=>b.addEventListener('click',()=>{currentSection=b.dataset.navTo; renderAll();}));
+  const dispBtn = document.getElementById('btnExportDisposal');
+  if(dispBtn) dispBtn.addEventListener('click', ()=>{
+    const rows = [];
+    disposeItems.slice().sort((a,b)=>totalQtyForPosm(b.code,whFilter)-totalQtyForPosm(a.code,whFilter)).forEach(p=>{
+      DATA.inventory.filter(r=>r.posmCode===p.code && r.qty>0 && (whFilter==='all'||r.warehouseId===whFilter)).forEach(r=>{
+        const w = whById(r.warehouseId);
+        rows.push({'POSM Code':p.code, Description:p.desc, Model:p.model||'', 'Business Unit':buLabel(p.bu), Type:p.type||'', Status:'Obsolete',
+          Warehouse:w?w.name:r.warehouseId, Region:w?w.region:'', 'Qty for Disposal':r.qty});
+      });
+    });
+    exportRowsToExcel(rows, 'For-Disposal-Obsolete-'+todayStr()+'.xlsx', 'For Disposal (Obsolete)');
+  });
   document.querySelectorAll('[data-kpi-go]').forEach(card=>card.addEventListener('click',()=>{
     const go = card.dataset.kpiGo;
     if(go==='stock'){ invFilters.status='all'; invScope='mine'; invLimit=INV_PAGE; currentSection='inventory'; }
-    else if(go==='disposal'){ invFilters.status='disposal'; invScope='mine'; invLimit=INV_PAGE; currentSection='inventory'; }
+    else if(go==='disposal'){ invFilters.status='obsolete'; invScope='mine'; invLimit=INV_PAGE; currentSection='inventory'; }
     else if(go==='pendingreq'){ currentSection='requests'; }
     else if(go==='delivered'){ currentSection='metrics'; }
     renderAll(); window.scrollTo(0,0);
@@ -3457,11 +3471,15 @@ function reqArrivalCmp(a, b){
   const ia = list.indexOf(a), ib = list.indexOf(b);   // just added on this device = newest
   return (ia<0 ? Infinity : ia) - (ib<0 ? Infinity : ib) || 0;
 }
+// Store Opening / Reopening requests get an amber mark so RMAS can spot them (longer preparation).
+function isOpeningReq(r){ return /store\s*(opening|reopening)/i.test(String(r && r.purpose || '')); }
+const OPENING_BADGE = `<span class="badge opening" title="Store Opening / Reopening request">🏬 Store Opening</span>`;
 function reqCardHtml(r){
   const p = posmByCode(r.posmCode);
   const isLate = r.status==='for_delivery' && r.dueDate && new Date(r.dueDate) < new Date();
   const deliveredLate = r.status==='delivered' && r.dateDelivered && r.dueDate && new Date(r.dateDelivered) > new Date(r.dueDate);
-  return `<div class="kcard"><div class="kcard-top"><span class="kcard-code">${r.posmCode}</span>${isLate?'<span class="badge late">Overdue</span>':(deliveredLate?'<span class="badge late">Late</span>':'')}</div>
+  const opening = isOpeningReq(r);
+  return `<div class="kcard${opening?' opening':''}"><div class="kcard-top"><span class="kcard-code">${r.posmCode}</span><span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">${opening?OPENING_BADGE:''}${isLate?'<span class="badge late">Overdue</span>':(deliveredLate?'<span class="badge late">Late</span>':'')}</span></div>
     ${r.status==='for_sorting' ? `<div class="sort-detail">
         ${tile(p||{code:r.posmCode,bu:''},48)}
         <div class="sort-info">
@@ -3498,16 +3516,25 @@ function sortingByTsHtml(items){
     const pcs = g.list.reduce((s,r)=>s+Number(r.qty||0),0);
     const stores = [...new Set(g.list.map(r=>r.store))];
     const first = g.list[0];
+    const nOpen = g.list.filter(isOpeningReq).length;
     return `<div class="ts-group">
       <div class="ts-group-head"><span class="ts-rank">#${gi+1}</span>
         <div class="ts-who"><div class="ts-name">${escHtml(g.ts)}</div>
           <div class="ts-sub">${g.list.length} ${vsPl(g.list.length,'item','items')} · ${pcs.toLocaleString()} pcs · first request ${fmtDateShort(first.dateCreated)}</div>
-          <div class="ts-sub">${stores.map(escHtml).join(', ')}</div></div></div>
+          <div class="ts-sub">${stores.map(escHtml).join(', ')}</div>
+          ${nOpen?`<div style="margin-top:4px;">${OPENING_BADGE.replace('🏬 Store Opening', '🏬 '+nOpen+' Store Opening '+vsPl(nOpen,'item','items'))}</div>`:''}</div></div>
       ${g.list.map(reqCardHtml).join('')}
     </div>`;
   }).join('');
 }
 
+function reqExportRow(r){
+  const p = posmByCode(r.posmCode);
+  return {'Request ID':r.id, 'POSM Code':r.posmCode, Description:p?p.desc:'', Model:p&&p.model||'', 'Business Unit':p?buLabel(p.bu):'',
+    Qty:r.qty, Warehouse: whById(r.warehouseId)?whById(r.warehouseId).name:r.warehouseId, Store:r.store, 'Trade Supervisor':r.ts,
+    Purpose:r.purpose||'', Status:isDeployed(r)?'deployed':r.status, 'Date Created':r.dateCreated, 'Due Date':r.dueDate||'', 'Date Delivered':r.dateDelivered||'', 'Created By':r.createdBy||'',
+    'Proof of Deployment':proofStatusLabel(r), 'Proof Uploaded By':(proofOf(r)||{}).uploadedBy||'', 'Proof Uploaded At':fmtDT((proofOf(r)||{}).uploadedAt), 'Proof Warnings':String((proofOf(r)||{}).flags||'').split(',').filter(Boolean).map(pkFlagLabel).join('; ')};
+}
 let reqView = 'board';
 function renderRequests(){
   const whFilter = currentFilterWarehouse();
@@ -3530,13 +3557,7 @@ function renderRequests(){
   document.querySelectorAll('.panel-head .seg button').forEach(b=>b.addEventListener('click',()=>{ reqView=b.dataset.v; renderRequests(); }));
   document.getElementById('btnExportReqTrf').addEventListener('click', ()=>{
     if(reqView==='board'){
-      const exportRows = reqs.map(r=>{
-        const p = posmByCode(r.posmCode);
-        return {'Request ID':r.id, 'POSM Code':r.posmCode, Description:p?p.desc:'', 'Business Unit':p?buLabel(p.bu):'',
-          Qty:r.qty, Warehouse: whById(r.warehouseId)?whById(r.warehouseId).name:r.warehouseId, Store:r.store, 'Trade Supervisor':r.ts,
-          Purpose:r.purpose||'', Status:isDeployed(r)?'deployed':r.status, 'Date Created':r.dateCreated, 'Due Date':r.dueDate||'', 'Date Delivered':r.dateDelivered||'', 'Created By':r.createdBy||'',
-          'Proof of Deployment':proofStatusLabel(r), 'Proof Uploaded By':(proofOf(r)||{}).uploadedBy||'', 'Proof Uploaded At':fmtDT((proofOf(r)||{}).uploadedAt), 'Proof Warnings':String((proofOf(r)||{}).flags||'').split(',').filter(Boolean).map(pkFlagLabel).join('; ')};
-      });
+      const exportRows = reqs.map(reqExportRow);
       exportRowsToExcel(exportRows, 'Requests-'+todayStr()+'.xlsx', 'Requests');
     } else {
       const exportRows = transfers.map(t=>{
@@ -4482,8 +4503,8 @@ async function exportAnalyticsReport(asPdf){
 
     const totalStock = DATA.inventory.reduce((s,r)=>s+r.qty,0);
     const totalBeg = DATA.inventory.reduce((s,r)=>s+r.beginningStock,0);
-    const disposeItems = DATA.posmMaster.filter(p=>p.status==='expired'||p.status==='obsolete');
-    const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && (p.status==='expired'||p.status==='obsolete');}).reduce((s,r)=>s+r.qty,0);
+    const disposeItems = DATA.posmMaster.filter(p=>p.status==='obsolete');
+    const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && p.status==='obsolete';}).reduce((s,r)=>s+r.qty,0);
     const pendingReq = DATA.requests.filter(r=>r.status==='for_sorting'||r.status==='for_delivery');
     const deliveredWeek = DATA.requests.filter(r=>r.status==='delivered' && r.dateDelivered && new Date(r.dateDelivered) >= new Date(Date.now()-7*86400000));
 
@@ -4494,8 +4515,8 @@ async function exportAnalyticsReport(asPdf){
       {Metric:'Total current stock (all warehouses)', Value:totalStock},
       {Metric:'Total beginning stock (all warehouses)', Value:totalBeg},
       {Metric:'Net variance (current - beginning)', Value:totalStock-totalBeg},
-      {Metric:'POSM types marked expired/obsolete', Value:disposeItems.length},
-      {Metric:'Total qty for disposal', Value:disposeQty},
+      {Metric:'POSM types marked obsolete (for disposal)', Value:disposeItems.length},
+      {Metric:'Total qty for disposal (obsolete)', Value:disposeQty},
       {Metric:'Pending requests (For Sorting + For Delivery)', Value:pendingReq.length},
       {Metric:'Delivered in last 7 days', Value:deliveredWeek.length},
       {Metric:'Total stock in/out transactions logged', Value:(DATA.txnCount!==undefined ? DATA.txnCount : DATA.transactions.length)},
@@ -5102,8 +5123,8 @@ function buildOnePageReport(){
   const invRows = DATA.inventory.filter(r=> (whFilter==='all' || r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
   const totalStock = invRows.reduce((s,r)=>s+r.qty,0), totalBeg = invRows.reduce((s,r)=>s+r.beginningStock,0);
   const delta = totalBeg ? ((totalStock-totalBeg)/totalBeg*100) : 0;
-  const disposeItems = DATA.posmMaster.filter(p=>(p.status==='expired'||p.status==='obsolete') && disposalRelevant(p, whFilter) && (buFilter==='all'||p.bu===buFilter));
-  const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && (p.status==='expired'||p.status==='obsolete') && (whFilter==='all'||r.warehouseId===whFilter) && (buFilter==='all'||p.bu===buFilter);}).reduce((s,r)=>s+r.qty,0);
+  const disposeItems = DATA.posmMaster.filter(p=>p.status==='obsolete' && disposalRelevant(p, whFilter) && (buFilter==='all'||p.bu===buFilter));
+  const disposeQty = DATA.inventory.filter(r=>{const p=posmByCode(r.posmCode); return p && p.status==='obsolete' && (whFilter==='all'||r.warehouseId===whFilter) && (buFilter==='all'||p.bu===buFilter);}).reduce((s,r)=>s+r.qty,0);
   const inWh = r => (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode);
   const sorting = DATA.requests.filter(r=>r.status==='for_sorting' && inWh(r)).length;
   const forDel = DATA.requests.filter(r=>r.status==='for_delivery' && inWh(r)).length;
@@ -5124,7 +5145,7 @@ function buildOnePageReport(){
     {l:'Total POSM Stock', v:totalStock.toLocaleString(), s:(delta>=0?'+':'')+delta.toFixed(1)+'% vs beginning', c: delta>=0?'#067647':'#B42318'},
     {l:'Beginning Stock', v:totalBeg.toLocaleString(), s:(totalStock-totalBeg>=0?'+':'')+(totalStock-totalBeg).toLocaleString()+' net change', c:'#4B5563'},
     {l:'Stock In / Out (30 days)', v:'+'+in30.toLocaleString()+' / -'+out30.toLocaleString(), s:'includes transfers', c:'#4B5563'},
-    {l:'For Disposal', v:disposeQty.toLocaleString(), s:disposeItems.length+' POSM '+vsPl(disposeItems.length,'type')+' expired/obsolete', c:'#B42318'},
+    {l:'For Disposal', v:disposeQty.toLocaleString(), s:disposeItems.length+' obsolete POSM '+vsPl(disposeItems.length,'type'), c:'#B42318'},
     {l:'Pending Requests', v:String(sorting+forDel), s:sorting+' for sorting · '+forDel+' for delivery', c:'#B54708'},
     {l:'Delivered (7 days)', v:String(delivered7), s: overdue ? overdue+' '+vsPl(overdue,'delivery','deliveries')+' OVERDUE' : 'no overdue deliveries', c: overdue?'#B42318':'#067647'},
   ];
@@ -5951,7 +5972,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.10-v17';
+const APP_VERSION = '2026.10.10-v18';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
