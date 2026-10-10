@@ -220,6 +220,13 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .kcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow);}
 .kcard-top{display:flex;justify-content:space-between;gap:6px;} .kcard-code{font-weight:700;font-size:12.5px;}
 .kcard-desc{font-size:11.5px;color:var(--ink-soft);margin-top:3px;}
+.sort-detail{display:flex;gap:10px;align-items:flex-start;margin:8px 0 6px;padding:8px;border-radius:8px;background:var(--surface-alt);border:1px solid var(--line);}
+.sort-info{min-width:0;flex:1;}
+.sort-desc{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.35;white-space:normal;overflow-wrap:anywhere;}
+.sort-line{font-size:11.5px;color:var(--ink-soft);margin-top:3px;line-height:1.35;overflow-wrap:anywhere;}
+.sort-line b{color:var(--ink);font-weight:600;}
+.sort-qty{font-size:12px;margin-top:5px;color:var(--ink);}
+.sort-qty b{font-size:14px;font-family:var(--font-display);}
 .kcard-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:var(--ink-faint);}
 .kcard-actions{display:flex;gap:6px;margin-top:8px;}
 .modal-backdrop{position:fixed;inset:0;background:rgba(15,18,24,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}
@@ -3484,8 +3491,18 @@ function renderRequests(){
               const isLate = r.status==='for_delivery' && r.dueDate && new Date(r.dueDate) < new Date();
               const deliveredLate = r.status==='delivered' && r.dateDelivered && r.dueDate && new Date(r.dateDelivered) > new Date(r.dueDate);
               return `<div class="kcard"><div class="kcard-top"><span class="kcard-code">${r.posmCode}</span>${isLate?'<span class="badge late">Overdue</span>':(deliveredLate?'<span class="badge late">Late</span>':'')}</div>
-                <div class="kcard-desc">${p?p.desc:''} · Qty ${r.qty}</div>
-                <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>
+                ${r.status==='for_sorting' ? `<div class="sort-detail">
+                    ${tile(p||{code:r.posmCode,bu:''},48)}
+                    <div class="sort-info">
+                      <div class="sort-desc">${p?p.desc:'(POSM not in the list)'}</div>
+                      ${p&&p.model?`<div class="sort-line"><b>Model:</b> ${escHtml(p.model)}</div>`:''}
+                      ${p?`<div class="sort-line"><b>Type:</b> ${escHtml(p.type||'—')} · <b>BU:</b> ${escHtml(buLabel(p.bu))}${p.status!=='active'?` · <span class="badge ${p.status}">${p.status==='expired'?'Expired':'Obsolete'}</span>`:''}</div>`:''}
+                      <div class="sort-qty">Qty to sort: <b>${Number(r.qty).toLocaleString()}</b> <span class="cell-sub">· stock here ${availableAt(r.warehouseId, r.posmCode).toLocaleString()}</span></div>
+                    </div></div>
+                  <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>
+                  <div class="kcard-meta" style="margin-top:2px;"><span>${r.id}</span><span>Requested ${fmtDateShort(r.dateCreated)}</span></div>`
+                : `<div class="kcard-desc">${p?p.desc:''} · Qty ${r.qty}</div>
+                <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>`}
                 <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.dueDate?'Due '+fmtDateShort(r.dueDate):''}</span></div>
                 ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span style="display:inline-flex;align-items:center;gap:4px;">${icon('target',12)} ${r.purpose}</span></div>`:''}
                 ${r.createdBy?`<div class="kcard-meta" style="margin-top:2px;"><span>Created by ${r.createdBy}</span></div>`:''}
@@ -3505,6 +3522,7 @@ function renderRequests(){
         }).join('')}
       </div>`;
     document.querySelectorAll('[data-advance]').forEach(b=>b.addEventListener('click',()=>advanceRequest(b.dataset.advance)));
+    loadImagesFor(reqs.filter(r=>r.status==='for_sorting').slice(0,60).map(r=>r.posmCode));
     document.querySelectorAll('[data-proof-up]').forEach(b=>b.addEventListener('click',()=>openProofUploadModal(b.dataset.proofUp)));
     document.querySelectorAll('[data-proof-view]').forEach(b=>b.addEventListener('click',()=>openProofViewModal(b.dataset.proofView)));
   } else {
@@ -5892,7 +5910,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.10-v14';
+const APP_VERSION = '2026.10.10-v15';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
