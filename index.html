@@ -246,6 +246,14 @@ body.region-user .admin-only{display:none !important;}
 .pp-cart-head{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);}
 .pp-cart-head .cell-sub{margin-left:auto;}
 .pp-cart-empty{display:flex;align-items:center;gap:8px;padding:10px 2px;font-size:12px;color:var(--ink-faint);}
+.leave-backdrop{position:fixed;inset:0;z-index:95;background:rgba(8,10,16,.55);display:flex;align-items:center;justify-content:center;padding:20px;}
+.leave-box{background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 24px 60px rgba(0,0,0,.35);width:100%;max-width:380px;padding:22px 20px 18px;text-align:center;}
+.leave-ico{width:44px;height:44px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;background:var(--warning-bg);color:var(--warning);}
+.leave-box h3{font-size:16px;margin-bottom:6px;}
+.leave-box p{margin:0 0 12px;font-size:13px;color:var(--ink-soft);line-height:1.5;}
+.leave-why{display:flex;gap:6px;align-items:flex-start;text-align:left;background:var(--warning-bg);color:var(--warning);border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:12px;}
+.leave-actions{display:flex;flex-direction:column;gap:8px;}
+.leave-actions .btn{justify-content:center;width:100%;}
 .pp-sel{display:none;align-items:center;gap:10px;padding:9px 11px;margin-bottom:8px;border-radius:var(--radius-sm);background:var(--primary-tint);border:1px solid color-mix(in srgb, var(--primary) 35%, transparent);}
 .pp-sel.show{display:flex;}
 .pp-list{max-height:280px;overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);}
@@ -1960,15 +1968,64 @@ function renderDatalists(){
 
 /* ============================= MODAL HELPERS ============================= */
 function openModal(title, bodyHtml, footHtml, wide){
+  modalGuard = null; closeLeaveDialog();
   const root = document.getElementById('modalRoot');
   root.innerHTML = `<div class="modal-backdrop" id="modalBackdrop"><div class="modal"${wide==='xl' ? ' style="max-width:min(980px,96vw);"' : (wide?' style="max-width:560px;"':'')}>
       <div class="modal-head"><h3>${title}</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>
       <div class="modal-body">${bodyHtml}</div><div class="modal-foot">${footHtml}</div></div></div>`;
-  document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
-  document.getElementById('modalBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='modalBackdrop') closeModal(); });
+  document.getElementById('modalCloseBtn').addEventListener('click', requestCloseModal);
+  // Close on outside click only when the press also STARTED outside (dragging out of a field won't close it).
+  const bd = document.getElementById('modalBackdrop'); let downOutside = false;
+  bd.addEventListener('pointerdown', e=>{ downOutside = e.target===bd; });
+  bd.addEventListener('click', e=>{ if(e.target===bd && downOutside) requestCloseModal(); downOutside = false; });
+  root.querySelectorAll('.modal-foot [onclick="closeModal()"]').forEach(b=>{ b.removeAttribute('onclick'); b.addEventListener('click', requestCloseModal); });
   document.body.classList.add('modal-open');
 }
-function closeModal(){ document.getElementById('modalRoot').innerHTML=''; document.body.classList.remove('modal-open'); }
+function closeModal(){ modalGuard = null; closeLeaveDialog(); document.getElementById('modalRoot').innerHTML=''; document.body.classList.remove('modal-open'); }
+
+/* ---- Unsaved-changes guard for pop-up windows ----
+   A window with entries (Stock In / Stock Out / Transfer) sets modalGuard = {isDirty, canSave, save, what}.
+   Closing it with ×, Cancel, a tap outside, or the phone's Back button then asks first:
+   Save / Don't save / Keep editing. */
+let modalGuard = null;
+function requestCloseModal(){
+  if(!document.getElementById('modalBackdrop')){ closeModal(); return; }
+  if(document.getElementById('leaveDialog')) return; // already asking
+  const g = modalGuard;
+  if(!g || !g.isDirty()){ closeModal(); return; }
+  const why = g.canSave ? g.canSave() : '';
+  const what = g.what ? g.what() : 'your entries';
+  const el = document.createElement('div');
+  el.id = 'leaveDialog'; el.className = 'leave-backdrop';
+  el.innerHTML = `<div class="leave-box" role="alertdialog" aria-modal="true" aria-labelledby="leaveTitle">
+      <div class="leave-ico">${icon('alert',22)}</div>
+      <h3 id="leaveTitle">Save before closing?</h3>
+      <p>You have <b>${escHtml(what)}</b> that ${what.match(/^1 /)?'is':'are'} not saved yet. If you close without saving, ${what.match(/^1 /)?'it':'they'} will be lost.</p>
+      ${why ? `<div class="leave-why">${icon('info',14)} Can't save yet: ${escHtml(why)}</div>` : ''}
+      <div class="leave-actions">
+        <button class="btn primary" data-leave="save" ${why?'disabled':''}>${icon('check',14)} Save</button>
+        <button class="btn danger" data-leave="discard">Don't save, close</button>
+        <button class="btn ghost" data-leave="stay">Keep editing</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  const pick = a=>{
+    closeLeaveDialog();
+    if(a==='discard') closeModal();
+    else if(a==='save' && g.save) g.save();
+  };
+  el.querySelectorAll('[data-leave]').forEach(b=>b.addEventListener('click', ()=>pick(b.dataset.leave)));
+  el.addEventListener('click', e=>{ if(e.target===el) pick('stay'); });
+  (el.querySelector('[data-leave="stay"]')).focus();
+}
+function closeLeaveDialog(){ const d = document.getElementById('leaveDialog'); if(d) d.remove(); }
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Escape') return;
+  if(document.getElementById('leaveDialog')){ closeLeaveDialog(); return; }
+  if(document.getElementById('modalBackdrop')) requestCloseModal();
+});
+// Reloading or closing the tab with unsaved entries asks too.
+window.addEventListener('beforeunload', e=>{ if(modalGuard && document.getElementById('modalBackdrop') && modalGuard.isDirty()){ e.preventDefault(); e.returnValue = ''; } });
 function posmOptions(selected){
   return DATA.posmMaster.map(p=>`<option value="${p.code}" ${p.code===selected?'selected':''}>${p.code} — ${escHtml(p.desc)}${p.model?' · '+escHtml(p.model):''}</option>`).join('');
 }
@@ -2390,7 +2447,7 @@ function wirePosmPicker(id, opts){
     if(!st.cart.length){
       box.innerHTML = `<div class="pp-cart-empty">${icon('box',16)} Tap a POSM above to add it here. You can add as many POSM as you need.</div>`;
     } else {
-      box.innerHTML = `<div class="pp-cart-head"><b>Selected POSM (${st.cart.length})</b><span class="cell-sub">${total.toLocaleString()} pcs</span><button type="button" class="btn sm ghost" data-clear>Clear all</button></div>
+      box.innerHTML = `<div class="pp-cart-head"><b>Selected POSM (${st.cart.length})</b><span class="cell-sub pp-total">${total.toLocaleString()} pcs</span><button type="button" class="btn sm ghost" data-clear>Clear all</button></div>
         ${st.cart.map(it=>{ const p = posmByCode(it.code) || {code:it.code, desc:'', bu:''}; const s = stock(it.code);
           const warn = isOut && w && it.qty > s;
           return `<div class="scan-item">
@@ -2398,7 +2455,7 @@ function wirePosmPicker(id, opts){
             <div class="scan-item-info">
               <div class="cell-main">${escHtml(it.code)} <span class="badge pending" style="margin-left:3px;">${escHtml(buLabel(p.bu))}</span></div>
               <div class="cell-sub">${escHtml(p.desc)}</div>
-              <div class="cell-sub">${w ? (isOut ? `Stock here: <b>${s.toLocaleString()}</b> → ${Math.max(0,s-it.qty).toLocaleString()}` : `Stock here: <b>${s.toLocaleString()}</b> → ${(s+it.qty).toLocaleString()}`) : 'Select a warehouse'}${warn?` <span class="scan-warn">· only ${s.toLocaleString()} available</span>`:''}</div>
+              <div class="cell-sub pp-stockline">${w ? (isOut ? `Stock here: <b>${s.toLocaleString()}</b> → ${Math.max(0,s-it.qty).toLocaleString()}` : `Stock here: <b>${s.toLocaleString()}</b> → ${(s+it.qty).toLocaleString()}`) : 'Select a warehouse'}${warn?` <span class="scan-warn">· only ${s.toLocaleString()} available</span>`:''}</div>
             </div>
             <div class="qty-step"><button type="button" data-act="dec" data-code="${escHtml(it.code)}">−</button><input type="number" min="1" inputmode="numeric" data-code="${escHtml(it.code)}" value="${it.qty}"><button type="button" data-act="inc" data-code="${escHtml(it.code)}">+</button></div>
             <button type="button" class="scan-remove" data-act="remove" data-code="${escHtml(it.code)}" title="Remove">&times;</button>
@@ -2413,12 +2470,23 @@ function wirePosmPicker(id, opts){
       changed();
     }));
     box.querySelectorAll('input[data-code]').forEach(inp=>{
-      inp.addEventListener('change', ()=>{ const it = inCart(inp.dataset.code); if(!it) return; it.qty = Math.max(1, parseInt(inp.value,10)||1); changed(); });
+      inp.addEventListener('input', ()=>{ const it = inCart(inp.dataset.code); if(!it) return; const v = parseInt(inp.value,10); if(v>0){ it.qty = v; lightUpdate(it, inp); } });
+      inp.addEventListener('change', ()=>{ const it = inCart(inp.dataset.code); if(!it) return; it.qty = Math.max(1, parseInt(inp.value,10)||1); inp.value = it.qty; lightUpdate(it, inp); });
       inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.dispatchEvent(new Event('change')); const s = $(id+'Search'); if(s){ s.focus(); s.select(); } } });
     });
     loadImagesFor(st.cart.map(i=>i.code));
   }
   function changed(){ drawCart(); drawList(); if(opts.onChange) opts.onChange(st.cart); }
+  function lightUpdate(it, inp){
+    const w = whId(), s = stock(it.code), row = inp.closest('.scan-item');
+    const line = row && row.querySelector('.pp-stockline');
+    if(line) line.innerHTML = (w ? (isOut ? `Stock here: <b>${s.toLocaleString()}</b> → ${Math.max(0,s-it.qty).toLocaleString()}` : `Stock here: <b>${s.toLocaleString()}</b> → ${(s+it.qty).toLocaleString()}`) : 'Select a warehouse')
+      + (isOut && w && it.qty > s ? ` <span class="scan-warn">· only ${s.toLocaleString()} available</span>` : '');
+    const tot = $(id+'Cart').querySelector('.pp-total'); if(tot) tot.textContent = st.cart.reduce((a,i)=>a+i.qty,0).toLocaleString()+' pcs';
+    const badge = $(id+'List').querySelector(`.pp-row[data-code="${cssEscape(it.code)}"] .badge.active`);
+    if(badge) badge.innerHTML = `${icon('check',11)} Added ×${it.qty}`;
+    if(opts.onChange) opts.onChange(st.cart);
+  }
   function add(code){
     let it = inCart(code);
     if(!it){
@@ -2436,7 +2504,7 @@ function wirePosmPicker(id, opts){
   search.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); clearTimeout(t); st.q = search.value; const m = matches(); if(m.length===1 || (m[0] && String(m[0].code).toLowerCase()===st.q.trim().toLowerCase())) add(m[0].code); else drawList(); } });
   (opts.preselect||[]).forEach(c=>{ if(posmByCode(c) && !inCart(c)) st.cart.push({code:c, qty: Math.max(1, opts.defaultQty||1)}); });
   drawSeg(); drawList(); drawCart(); if(opts.onChange) opts.onChange(st.cart);
-  return { redraw(){ drawCart(); drawList(); if(opts.onChange) opts.onChange(st.cart); }, items(){ return st.cart.map(i=>({code:i.code, qty:i.qty})); } };
+  return { redraw(){ drawCart(); drawList(); if(opts.onChange) opts.onChange(st.cart); }, items(){ return st.cart.map(i=>({code:i.code, qty:i.qty})); }, remove(codes){ const set = new Set(codes); st.cart = st.cart.filter(i=>!set.has(i.code)); changed(); } };
 }
 
 /* ---- Stock In modal (many POSM at once, or one New POSM) ---- */
@@ -2520,6 +2588,13 @@ function openStockInModal(){
     refreshBtn();
   });
   refreshBtn();
+  modalGuard = {
+    isDirty: ()=> !saving && (cart.length>0 || !!receiptDataUrl || !!document.getElementById('siRef').value.trim() || (newToggle.checked && !!document.getElementById('siNewCode').value.trim())),
+    canSave: ()=> newToggle.checked ? (receiptDataUrl ? '' : 'upload the delivery receipt photo first')
+                 : (!cart.length ? 'add at least one POSM' : (!receiptDataUrl ? 'upload the delivery receipt photo first' : '')),
+    what: ()=> cart.length ? `${cart.length} POSM (${cart.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs)` : 'Stock In details',
+    save: ()=> submitBtn.click(),
+  };
 
   submitBtn.addEventListener('click', async ()=>{
     if(!receiptDataUrl){ alert('Please upload a delivery receipt photo first.'); return; }
@@ -2606,6 +2681,13 @@ function openStockOutModal(prefillCode, prefillReasonDispose){
   const picker = wirePosmPicker('soPosm', {whSelectId:'soWh', mode:'out', defaultQty:1, preselect: prefillCode ? [prefillCode] : [], onChange:c=>{ cart = c; refreshBtn(); }});
   document.getElementById('soWh').addEventListener('change', picker.redraw);
   refreshBtn();
+  const startList = JSON.stringify(picker.items());
+  modalGuard = {
+    isDirty: ()=> !saving && cart.length>0 && JSON.stringify(picker.items())!==startList,
+    canSave: ()=> cart.length ? '' : 'add at least one POSM',
+    what: ()=> `${cart.length} POSM (${cart.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs)`,
+    save: ()=> btn.click(),
+  };
   btn.addEventListener('click', async ()=>{
     const whId = document.getElementById('soWh').value;
     const wh = whById(whId), whName = wh ? wh.name : whId;
@@ -2683,28 +2765,73 @@ function openNewRequestModal(){
       catch(e){ alert('Could not save the request.\n\n' + ((e && e.message) || 'Please try again.')); btn.disabled=false; btn.textContent='Create Request'; }
   });
 }
-/* ---- New Transfer modal ---- */
+/* ---- New Transfer modal (many POSM at once, with search + BU tabs) ---- */
 function openNewTransferModal(){
+  let cart = [], saving = false;
+  const firstTo = (ALL_WAREHOUSES.find(w=>!WAREHOUSES[0] || w.id!==WAREHOUSES[0].id)||{}).id;
   openModal('Transfer POSM Between Warehouses', `
-    <div class="field"><label>POSM</label><select id="trPosm">${posmOptions()}</select></div>
     <div class="two-col">
       <div class="field"><label>From Warehouse</label><select id="trFrom">${whOptions()}</select></div>
-      <div class="field"><label>To Warehouse</label><select id="trTo">${whOptions((ALL_WAREHOUSES.find(w=>!WAREHOUSES[0] || w.id!==WAREHOUSES[0].id)||{}).id, true)}</select></div>
+      <div class="field"><label>To Warehouse</label><select id="trTo">${whOptions(firstTo, true)}</select></div>
     </div>
-    <div class="field"><label>Quantity</label><input type="number" id="trQty" min="1" value="10"></div>
-  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="trSubmit">${actionLabel('Create Transfer')}</button>`);
-  document.getElementById('trSubmit').addEventListener('click', async ()=>{
-    const btn = document.getElementById('trSubmit');
+    <div class="field"><label>POSM <span class="cell-sub" style="font-weight:500;">— search, tap to add, then type the quantity</span></label>${posmPickerHtml('trPosm')}</div>
+  `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="trSubmit" disabled></button>`, true);
+  const btn = document.getElementById('trSubmit');
+  { const f = document.getElementById('trFrom'), t = document.getElementById('trTo');
+    if(f.value===t.value){ const o = [...t.options].find(o=>o.value && o.value!==f.value); if(o) t.value = o.value; } }
+  function refreshBtn(){
+    if(saving) return;
+    const total = cart.reduce((s,i)=>s+i.qty,0);
+    btn.textContent = actionLabel('Create Transfer') + (cart.length ? ` (${cart.length} POSM · ${total.toLocaleString()} pcs)` : '');
+    btn.disabled = !cart.length;
+  }
+  const picker = wirePosmPicker('trPosm', {whSelectId:'trFrom', mode:'out', defaultQty:1, onChange:c=>{ cart = c; refreshBtn(); }});
+  document.getElementById('trFrom').addEventListener('change', picker.redraw);
+  refreshBtn();
+  modalGuard = {
+    isDirty: ()=> !saving && cart.length>0,
+    canSave: ()=> cart.length ? '' : 'add at least one POSM',
+    what: ()=> `${cart.length} POSM (${cart.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs)`,
+    save: ()=> btn.click(),
+  };
+  btn.addEventListener('click', async ()=>{
     const from = document.getElementById('trFrom').value, to = document.getElementById('trTo').value;
     if(from===to){ alert('The From and To warehouses must be different.'); return; }
-    const data = {posmCode:document.getElementById('trPosm').value, qty:Math.max(1,parseInt(document.getElementById('trQty').value||'0',10)),
-      fromWarehouseId:from, toWarehouseId:to, status:'pending', dateCreated:todayStr(), dateCompleted:null};
-    btn.disabled = true; btn.textContent = 'Saving...';
-      try{ const res = await performAction('newTransfer', Object.assign({id:uid('TRF')}, data)); closeModal(); notifyIfPending(res); }
-      catch(e){ alert('Could not save the transfer.\n\n' + ((e && e.message) || 'Please try again.')); btn.disabled=false; btn.textContent=actionLabel('Create Transfer'); }
+    const items = picker.items();
+    if(!items.length){ alert('Search and add at least one POSM first.'); return; }
+    const fromName = (whById(from)||{}).name || from, toName = (whById(to)||{}).name || to;
+    const short = items.filter(it=>it.qty > availableAt(from, it.code));
+    if(short.length && !confirm(`${short.length} POSM have more than the stock at ${fromName} right now:\n${short.slice(0,8).map(i=>`${i.code}: ${i.qty} to transfer, ${availableAt(from,i.code)} in stock`).join('\n')}${short.length>8?'\n…':''}\n\nCreate the transfer anyway?`)) return;
+    const total = items.reduce((s,i)=>s+i.qty,0);
+    if(items.length>1 && !short.length && !confirm(`Transfer ${items.length} POSM (${total.toLocaleString()} pcs) from ${fromName} to ${toName}?`)) return;
+    saving = true; btn.disabled = true;
+    const done = [], isAdmin = session && session.role==='admin';
+    let failed = null, pending = false;
+    for(let i=0; i<items.length; i++){
+      const it = items[i];
+      btn.textContent = items.length>1 ? `Saving ${i+1} of ${items.length}...` : 'Saving...';
+      const data = {id: uid('TRF'), posmCode: it.code, qty: it.qty, fromWarehouseId: from, toWarehouseId: to, status:'pending', dateCreated: todayStr(), dateCompleted: null};
+      try{
+        const res = await performAction('newTransfer', data, {silent:true});
+        if(res && res.applied===false) pending = true;
+        else if(isAdmin) applyLocalUpdate('newTransfer', data);
+        done.push(it.code);
+      }catch(e){ failed = {code: it.code, msg: (e && e.message) || 'Please try again.'}; break; }
+    }
+    if(done.length) loadFromServer(true).catch(()=>{});
+    if(failed){
+      saving = false;
+      picker.remove(done);
+      refreshBtn();
+      renderAll();
+      alert(`${done.length ? `Saved ${done.length} of ${items.length} transfers. ` : ''}Could not save ${failed.code}.\n\n${failed.msg}\n\nThe POSM not yet saved are still in the list — tap the button to try again.`);
+      return;
+    }
+    closeModal(); renderAll();
+    if(pending) notifyIfPending({applied:false}, `${items.length} ${vsPl(items.length,'transfer','transfers')} sent to Admin for approval.`);
+    else showToast(`Created ${items.length} ${vsPl(items.length,'transfer','transfers')}: ${fromName} → ${toName}`);
   });
 }
-
 /* ============================= ACTIONS ============================= */
 // A second tap while the first one is still saving is ignored (prevents double submissions).
 const advancing = new Set();
@@ -5627,7 +5754,8 @@ function initBackHandling(){
   }catch(e){ return; }
   window.addEventListener('popstate', ()=>{
     const reTrap = ()=>{ try{ history.pushState({rmasTrap:true}, ''); }catch(e){} };
-    if(document.getElementById('modalBackdrop')){ closeModal(); reTrap(); return; }
+    if(document.getElementById('leaveDialog')){ closeLeaveDialog(); reTrap(); return; }
+    if(document.getElementById('modalBackdrop')){ requestCloseModal(); reTrap(); return; }
     const lb = document.querySelector('.lightbox, #lightbox, .receipt-lightbox');
     if(lb && lb.offsetParent !== null){ lb.remove(); reTrap(); return; }
     if(sheetIsOpen()){ closeSheets(); reTrap(); return; }
@@ -5747,7 +5875,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.10-v11';
+const APP_VERSION = '2026.10.10-v12';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
