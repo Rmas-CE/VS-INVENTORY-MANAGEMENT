@@ -235,6 +235,22 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .status-select{border:1px solid var(--line);background:var(--surface-alt);color:var(--ink);border-radius:var(--radius-sm);padding:4px 6px;font-size:11.5px;}
 body.region-user .admin-only{display:none !important;}
 .btn svg, .sm-item svg{flex-shrink:0;}
+/* ===== Searchable POSM picker (Stock In) ===== */
+.pp-tools{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;}
+.pp-tools .seg{width:100%;overflow-x:auto;scrollbar-width:none;}
+.pp-tools .seg::-webkit-scrollbar{display:none;}
+.pp-tools .seg button{flex:1;white-space:nowrap;}
+.pp-tools .seg button .n{opacity:.7;font-weight:500;margin-left:3px;}
+.pp-sel{display:none;align-items:center;gap:10px;padding:9px 11px;margin-bottom:8px;border-radius:var(--radius-sm);background:var(--primary-tint);border:1px solid color-mix(in srgb, var(--primary) 35%, transparent);}
+.pp-sel.show{display:flex;}
+.pp-list{max-height:280px;overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);}
+.pp-row{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:none;border-bottom:1px solid var(--line);background:none;text-align:left;color:var(--ink);font-family:var(--font-ui);cursor:pointer;}
+.pp-row:last-child{border-bottom:none;}
+.pp-row:hover{background:var(--surface-alt);}
+.pp-row.sel{background:var(--primary-tint);box-shadow:inset 3px 0 0 var(--primary);}
+.pp-row .pp-desc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pp-row .pp-right{text-align:right;flex-shrink:0;}
+.pp-more{padding:9px 10px;font-size:11.5px;color:var(--ink-faint);text-align:center;}
 .btn{gap:6px;}
 .inv-table td{vertical-align:middle;}
 .inv-table .cell-sub[title]{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -2312,6 +2328,75 @@ function openReceiptLightbox(dataUrl, label){
     `<button class="btn ghost" onclick="closeModal()">Close</button>`);
 }
 
+/* ---- Searchable POSM picker (search + Business Unit tabs) ---- */
+function posmPickerHtml(id){
+  return `<div class="pp-tools">
+      <input type="text" id="${id}Search" placeholder="Search code, description or model..." autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <div class="seg" id="${id}BuSeg"></div>
+    </div>
+    <div class="pp-sel" id="${id}Sel"></div>
+    <div class="pp-list" id="${id}List"></div>
+    <input type="hidden" id="${id}" value="">`;
+}
+function wirePosmPicker(id, opts){
+  opts = opts || {};
+  const gBu = currentFilterBU();
+  const st = {q:'', bu: (gBu && gBu!=='all') ? gBu : 'all', code: opts.selected || ''};
+  const SHOW = 60;
+  const $ = x=>document.getElementById(x);
+  const whId = ()=> opts.whSelectId ? (($(opts.whSelectId)||{}).value || '') : '';
+  const pool = ()=> DATA.posmMaster.filter(p=>p.status!=='deleted');
+  const matches = ()=>{
+    const q = st.q.trim().toLowerCase();
+    const list = pool().filter(p=>(st.bu==='all' || p.bu===st.bu) && posmMatches(p, q));
+    return list.sort((a,b)=>{
+      if(q){ const ea = String(a.code).toLowerCase()===q, eb = String(b.code).toLowerCase()===q; if(ea!==eb) return ea?-1:1;
+             const sa = String(a.code).toLowerCase().startsWith(q), sb = String(b.code).toLowerCase().startsWith(q); if(sa!==sb) return sa?-1:1; }
+      return String(a.code).localeCompare(String(b.code));
+    });
+  };
+  const stockTxt = code=>{ const w = whId(); return w ? availableAt(w, code).toLocaleString() : ''; };
+  function drawSeg(){
+    const all = pool();
+    $(id+'BuSeg').innerHTML = ['all'].concat(BUS).map(b=>{
+      const n = b==='all' ? all.length : all.filter(p=>p.bu===b).length;
+      return `<button type="button" data-bu="${escHtml(b)}" class="${st.bu===b?'active':''}">${b==='all'?'All BU':escHtml(buLabel(b))}<span class="n">${n}</span></button>`;
+    }).join('');
+    $(id+'BuSeg').querySelectorAll('[data-bu]').forEach(btn=>btn.addEventListener('click', ()=>{ st.bu = btn.dataset.bu; drawSeg(); drawList(); }));
+  }
+  function drawSel(){
+    const el = $(id+'Sel'), p = st.code ? posmByCode(st.code) : null;
+    $(id).value = p ? p.code : '';
+    if(!p){ el.classList.remove('show'); el.innerHTML = ''; return; }
+    const w = whId();
+    el.classList.add('show');
+    el.innerHTML = `${tile(p,34)}<div style="min-width:0;flex:1;"><div class="cell-main">${escHtml(p.code)} <span class="badge pending" style="margin-left:4px;">${escHtml(buLabel(p.bu))}</span></div>
+      <div class="cell-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(p.desc)}</div>
+      ${w ? `<div class="cell-sub">Stock here now: <b>${stockTxt(p.code)}</b></div>` : ''}</div>
+      <button type="button" class="btn sm ghost" id="${id}Clear" title="Change">Change</button>`;
+    $(id+'Clear').addEventListener('click', ()=>{ st.code=''; drawSel(); drawList(); const s=$(id+'Search'); s.focus(); });
+  }
+  function drawList(){
+    const list = matches(), shown = list.slice(0, SHOW), w = whId();
+    const box = $(id+'List');
+    box.innerHTML = shown.length ? shown.map(p=>`<button type="button" class="pp-row ${p.code===st.code?'sel':''}" data-code="${escHtml(p.code)}">
+        ${tile(p,30)}
+        <div style="min-width:0;flex:1;"><div class="cell-main">${escHtml(p.code)}</div><div class="cell-sub pp-desc">${escHtml(p.desc)}</div>${p.model?`<div class="cell-sub pp-desc">Model: ${escHtml(p.model)}</div>`:''}</div>
+        <div class="pp-right"><span class="badge pending">${escHtml(buLabel(p.bu))}</span>${w?`<div class="cell-sub" style="margin-top:3px;">Stock: <b>${stockTxt(p.code)}</b></div>`:''}</div>
+      </button>`).join('') + (list.length > SHOW ? `<div class="pp-more">Showing ${SHOW} of ${list.length.toLocaleString()} — type more to narrow it down</div>` : '')
+      : `<div class="pp-more">No POSM matches${st.bu!=='all' ? ' in '+escHtml(buLabel(st.bu))+' — try "All BU"' : ''}.</div>`;
+    box.querySelectorAll('[data-code]').forEach(b=>b.addEventListener('click', ()=>pick(b.dataset.code)));
+    loadImagesFor(shown.map(p=>p.code));
+  }
+  function pick(code){ st.code = code; drawSel(); drawList(); if(opts.onPick) opts.onPick(code); }
+  const search = $(id+'Search');
+  let t = null;
+  search.addEventListener('input', ()=>{ st.q = search.value; clearTimeout(t); t = setTimeout(drawList, 150); });
+  search.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); clearTimeout(t); st.q = search.value; const m = matches(); if(m.length===1 || (m[0] && String(m[0].code).toLowerCase()===st.q.trim().toLowerCase())) pick(m[0].code); else drawList(); } });
+  drawSeg(); drawSel(); drawList();
+  return { redraw(){ drawSel(); drawList(); }, get value(){ return st.code; } };
+}
+
 /* ---- Stock In modal ---- */
 function openStockInModal(){
   let receiptDataUrl = null;
@@ -2319,7 +2404,8 @@ function openStockInModal(){
   openModal('Stock In — New POSM Arrival', `
     <div class="notice" style="margin:0;">${icon('alert',15)}<div>You need to upload a photo of the <b>delivery receipt</b> as proof before the new stock in can be saved.</div></div>
     <div class="field admin-only"><label><input type="checkbox" id="siNewPosm" style="width:auto;margin-right:6px;">New POSM (not yet in the list)</label></div>
-    <div id="siExistingWrap" class="field"><label>POSM</label><select id="siPosm">${posmOptions()}</select></div>
+    <div class="field"><label>Warehouse</label><select id="siWh">${whOptions()}</select></div>
+    <div id="siExistingWrap" class="field"><label>POSM <span class="cell-sub" style="font-weight:500;">— search, then tap to select</span></label>${posmPickerHtml('siPosm')}</div>
     <div id="siNewWrap" style="display:none;">
       <div class="field"><label>New POSM Code</label><input type="text" id="siNewCode" placeholder="e.g. AC00071"></div>
       <div class="field"><label>Description</label><input type="text" id="siNewDesc" placeholder="e.g. USED FOR 2026 NEW MODEL"></div>
@@ -2335,7 +2421,6 @@ function openStockInModal(){
         </div>
       </div>
     </div>
-    <div class="field"><label>Warehouse</label><select id="siWh">${whOptions()}</select></div>
     <div class="two-col">
       <div class="field"><label>Quantity</label><input type="number" id="siQty" min="1" value="10"></div>
       <div class="field"><label>Date</label><input type="date" id="siDate" value="${todayStr()}"></div>
@@ -2351,6 +2436,8 @@ function openStockInModal(){
 
   const submitBtn = document.getElementById('siSubmit');
   const newToggle = document.getElementById('siNewPosm');
+  const siPicker = wirePosmPicker('siPosm', {whSelectId:'siWh', onPick:()=>{ const q = document.getElementById('siQty'); if(q){ q.focus(); q.select(); } }});
+  document.getElementById('siWh').addEventListener('change', siPicker.redraw);
   newToggle.addEventListener('change', ()=>{
     document.getElementById('siExistingWrap').style.display = newToggle.checked ? 'none' : '';
     document.getElementById('siNewWrap').style.display = newToggle.checked ? '' : 'none';
@@ -2399,6 +2486,7 @@ function openStockInModal(){
       // (the single 'stockIn' request below creates the POSM server-side via isNew:true)
     } else {
       code = document.getElementById('siPosm').value;
+      if(!code){ alert('Search and select the POSM first.'); const s = document.getElementById('siPosmSearch'); if(s) s.focus(); return; }
     }
 
     submitBtn.disabled = true; submitBtn.textContent = 'Saving...';
@@ -5565,7 +5653,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.09.30-v9';
+const APP_VERSION = '2026.10.10-v10';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
