@@ -214,6 +214,10 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .proof-photos-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;} .proof-photos-big img{width:100%;border-radius:10px;display:block;cursor:zoom-in;background:var(--surface-alt);}
 
 .kanban-col{background:var(--surface-alt);border:1px solid var(--line);border-radius:var(--radius);padding:12px;min-height:120px;}
+/* Each board column scrolls on its own so a long For Sorting list does not stretch the page. */
+.kcol-scroll{max-height:max(420px, calc(100vh - 290px));overflow-y:auto;overscroll-behavior:contain;margin-right:-6px;padding-right:6px;scrollbar-width:thin;}
+.kcol-sorting{max-height:max(460px, calc(100vh - 260px));}
+body.mobile-app .kcol-scroll{max-height:calc(var(--vh) * 72);}
 .kanban-col-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 2px;}
 .kanban-col-head h4{font-size:12.5px;}
 .kanban-count{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;color:var(--ink-soft);}
@@ -3554,7 +3558,7 @@ function renderRequests(){
             .sort((a,b)=> c.key==='deployed' ? String((proofOf(b)||{}).uploadedAt).localeCompare(String((proofOf(a)||{}).uploadedAt))
               : c.key==='delivered' ? String(b.dateDelivered||'').localeCompare(String(a.dateDelivered||'')) : (c.key==='for_sorting' ? reqArrivalCmp(a,b) : new Date(b.dateCreated)-new Date(a.dateCreated)));
           return `<div class="kanban-col"><div class="kanban-col-head"><h4><span class="badge ${c.cls}">${c.label}</span></h4><span class="kanban-count">${items.length}</span></div>
-            ${(c.key==='for_sorting' ? sortingByTsHtml(items) : items.slice(0,25).map(reqCardHtml).join('')) || `<div class="empty-state">No requests here.</div>`}
+            <div class="kcol-scroll${c.key==='for_sorting'?' kcol-sorting':''}">${(c.key==='for_sorting' ? sortingByTsHtml(items) : items.slice(0,25).map(reqCardHtml).join('')) || `<div class="empty-state">No requests here.</div>`}</div>
           </div>`;
         }).join('')}
       </div>`;
@@ -5947,7 +5951,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.10-v16';
+const APP_VERSION = '2026.10.10-v17';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
