@@ -220,6 +220,14 @@ tbody tr:last-child td{border-bottom:none;} tbody tr:hover{background:var(--surf
 .kcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow);}
 .kcard-top{display:flex;justify-content:space-between;gap:6px;} .kcard-code{font-weight:700;font-size:12.5px;}
 .kcard-desc{font-size:11.5px;color:var(--ink-soft);margin-top:3px;}
+.ts-group{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px;margin-bottom:10px;}
+.ts-group .kcard{box-shadow:none;}
+.ts-group .kcard:last-child{margin-bottom:0;}
+.ts-group-head{display:flex;gap:8px;align-items:flex-start;padding:2px 2px 8px;}
+.ts-rank{flex:none;min-width:26px;height:26px;border-radius:8px;background:var(--warning-bg);color:var(--warning);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;}
+.ts-who{min-width:0;flex:1;}
+.ts-name{font-weight:700;font-size:13px;color:var(--ink);}
+.ts-sub{font-size:11px;color:var(--ink-faint);line-height:1.35;overflow-wrap:anywhere;}
 .sort-detail{display:flex;gap:10px;align-items:flex-start;margin:8px 0 6px;padding:8px;border-radius:8px;background:var(--surface-alt);border:1px solid var(--line);}
 .sort-info{min-width:0;flex:1;}
 .sort-desc{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.35;white-space:normal;overflow-wrap:anywhere;}
@@ -1549,7 +1557,7 @@ function applyLocalUpdate(action, payload, result){
       return true;
     }
     case 'newRequest': {
-      DATA.requests.unshift({id:payload.id, posmCode:payload.posmCode, qty:Number(payload.qty), warehouseId:payload.warehouseId, store:payload.store, ts:payload.ts, status:'for_sorting', dateCreated:payload.dateCreated, dateDelivered:'', dueDate:'', createdBy:payload.createdBy||'', purpose:payload.purpose||''});
+      DATA.requests.push({id:payload.id, posmCode:payload.posmCode, qty:Number(payload.qty), warehouseId:payload.warehouseId, store:payload.store, ts:payload.ts, status:'for_sorting', dateCreated:payload.dateCreated, dateDelivered:'', dueDate:'', createdBy:payload.createdBy||'', purpose:payload.purpose||''});
       return true;
     }
     case 'advanceRequest': {
@@ -3436,6 +3444,66 @@ function renderStockflow(){
 }
 
 /* ============================= RENDER: REQUESTS & TRANSFERS ============================= */
+/* ---- Requests board helpers ---- */
+// First come, first served: older request date first; same day -> the order it reached the Sheet.
+function reqArrivalCmp(a, b){
+  const d = String(a.dateCreated||'').localeCompare(String(b.dateCreated||''));
+  if(d) return d;
+  const list = (DATA_ALL && DATA_ALL.requests) || DATA.requests;
+  const ia = list.indexOf(a), ib = list.indexOf(b);   // just added on this device = newest
+  return (ia<0 ? Infinity : ia) - (ib<0 ? Infinity : ib) || 0;
+}
+function reqCardHtml(r){
+  const p = posmByCode(r.posmCode);
+  const isLate = r.status==='for_delivery' && r.dueDate && new Date(r.dueDate) < new Date();
+  const deliveredLate = r.status==='delivered' && r.dateDelivered && r.dueDate && new Date(r.dateDelivered) > new Date(r.dueDate);
+  return `<div class="kcard"><div class="kcard-top"><span class="kcard-code">${r.posmCode}</span>${isLate?'<span class="badge late">Overdue</span>':(deliveredLate?'<span class="badge late">Late</span>':'')}</div>
+    ${r.status==='for_sorting' ? `<div class="sort-detail">
+        ${tile(p||{code:r.posmCode,bu:''},48)}
+        <div class="sort-info">
+          <div class="sort-desc">${p?p.desc:'(POSM not in the list)'}</div>
+          ${p&&p.model?`<div class="sort-line"><b>Model:</b> ${escHtml(p.model)}</div>`:''}
+          ${p?`<div class="sort-line"><b>Type:</b> ${escHtml(p.type||'—')} · <b>BU:</b> ${escHtml(buLabel(p.bu))}${p.status!=='active'?` · <span class="badge ${p.status}">${p.status==='expired'?'Expired':'Obsolete'}</span>`:''}</div>`:''}
+          <div class="sort-qty">Qty to sort: <b>${Number(r.qty).toLocaleString()}</b> <span class="cell-sub">· stock here ${availableAt(r.warehouseId, r.posmCode).toLocaleString()}</span></div>
+        </div></div>
+      <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>
+      <div class="kcard-meta" style="margin-top:2px;"><span>${r.id}</span><span>Requested ${fmtDateShort(r.dateCreated)}</span></div>`
+    : `<div class="kcard-desc">${p?p.desc:''} · Qty ${r.qty}</div>
+    <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>`}
+    <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.dueDate?'Due '+fmtDateShort(r.dueDate):''}</span></div>
+    ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span style="display:inline-flex;align-items:center;gap:4px;">${icon('target',12)} ${r.purpose}</span></div>`:''}
+    ${r.createdBy?`<div class="kcard-meta" style="margin-top:2px;"><span>Created by ${r.createdBy}</span></div>`:''}
+    ${r.status!=='delivered' ? `<div class="kcard-actions"><button class="btn sm primary" data-advance="${r.id}" style="flex:1">${r.status==='for_sorting'?'Move to For Delivery':'Mark Delivered'}</button></div>`
+      : isDeployed(r) ? (()=>{ const pf = proofOf(r), nf = String(pf.flags||'').split(',').filter(Boolean).length;
+          return `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span><span>Proof ${pf.uploadedAt?fmtDateShort(String(pf.uploadedAt).slice(0,10)):''}</span></div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${proofChipHtml(r)}${nf?`<span class="badge obsolete" title="${escHtml(String(pf.flags).split(',').map(pkFlagLabel).join(' · '))}">${icon('alert',11)} ${nf} warning${nf!==1?'s':''}</span>`:''}</div>
+          ${pf.uploadedBy?`<div class="kcard-meta" style="margin-top:2px;"><span>By ${escHtml(pf.uploadedBy)}</span></div>`:''}
+          <div class="kcard-actions"><button class="btn sm ${pf.status==='for_review' && session && session.role==='admin'?'primary':''}" data-proof-view="${r.id}" style="flex:1">${icon('camera',12)} ${pf.status==='for_review' && session && session.role==='admin'?'Review proof':'View proof'}</button></div>`; })()
+      : `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span></div>
+         <div style="margin-top:6px;">${proofChipHtml(r)}</div>
+         ${(proofOf(r)||{}).status==='rejected' && proofOf(r).rejectReason ? `<div class="kcard-meta" style="margin-top:2px;color:var(--danger);"><span>Reason: ${escHtml(proofOf(r).rejectReason)}</span></div>` : ''}
+         <div class="kcard-actions">${(proofOf(r)||{}).status==='rejected' ? `<button class="btn sm" data-proof-view="${r.id}">View</button>` : ''}<button class="btn sm primary" data-proof-up="${r.id}" style="flex:1">${icon('camera',12)} Upload proof</button></div>`}
+  </div>`;
+}
+// For Sorting: one block per Trade Supervisor. Blocks are in the order the TS first requested;
+// inside a block, that TS's requests are oldest first.
+function sortingByTsHtml(items){
+  const groups = [], byTs = {};
+  items.forEach(r=>{ const k = r.ts || '—'; if(!byTs[k]){ byTs[k] = {ts:k, list:[]}; groups.push(byTs[k]); } byTs[k].list.push(r); });
+  return groups.map((g, gi)=>{
+    const pcs = g.list.reduce((s,r)=>s+Number(r.qty||0),0);
+    const stores = [...new Set(g.list.map(r=>r.store))];
+    const first = g.list[0];
+    return `<div class="ts-group">
+      <div class="ts-group-head"><span class="ts-rank">#${gi+1}</span>
+        <div class="ts-who"><div class="ts-name">${escHtml(g.ts)}</div>
+          <div class="ts-sub">${g.list.length} ${vsPl(g.list.length,'item','items')} · ${pcs.toLocaleString()} pcs · first request ${fmtDateShort(first.dateCreated)}</div>
+          <div class="ts-sub">${stores.map(escHtml).join(', ')}</div></div></div>
+      ${g.list.map(reqCardHtml).join('')}
+    </div>`;
+  }).join('');
+}
+
 let reqView = 'board';
 function renderRequests(){
   const whFilter = currentFilterWarehouse();
@@ -3484,40 +3552,9 @@ function renderRequests(){
         ${cols.map(c=>{
           const items = reqs.filter(r=> c.key==='deployed' ? isDeployed(r) : c.key==='delivered' ? (r.status==='delivered' && !isDeployed(r)) : r.status===c.key)
             .sort((a,b)=> c.key==='deployed' ? String((proofOf(b)||{}).uploadedAt).localeCompare(String((proofOf(a)||{}).uploadedAt))
-              : c.key==='delivered' ? String(b.dateDelivered||'').localeCompare(String(a.dateDelivered||'')) : new Date(b.dateCreated)-new Date(a.dateCreated));
+              : c.key==='delivered' ? String(b.dateDelivered||'').localeCompare(String(a.dateDelivered||'')) : (c.key==='for_sorting' ? reqArrivalCmp(a,b) : new Date(b.dateCreated)-new Date(a.dateCreated)));
           return `<div class="kanban-col"><div class="kanban-col-head"><h4><span class="badge ${c.cls}">${c.label}</span></h4><span class="kanban-count">${items.length}</span></div>
-            ${items.slice(0,25).map(r=>{
-              const p = posmByCode(r.posmCode);
-              const isLate = r.status==='for_delivery' && r.dueDate && new Date(r.dueDate) < new Date();
-              const deliveredLate = r.status==='delivered' && r.dateDelivered && r.dueDate && new Date(r.dateDelivered) > new Date(r.dueDate);
-              return `<div class="kcard"><div class="kcard-top"><span class="kcard-code">${r.posmCode}</span>${isLate?'<span class="badge late">Overdue</span>':(deliveredLate?'<span class="badge late">Late</span>':'')}</div>
-                ${r.status==='for_sorting' ? `<div class="sort-detail">
-                    ${tile(p||{code:r.posmCode,bu:''},48)}
-                    <div class="sort-info">
-                      <div class="sort-desc">${p?p.desc:'(POSM not in the list)'}</div>
-                      ${p&&p.model?`<div class="sort-line"><b>Model:</b> ${escHtml(p.model)}</div>`:''}
-                      ${p?`<div class="sort-line"><b>Type:</b> ${escHtml(p.type||'—')} · <b>BU:</b> ${escHtml(buLabel(p.bu))}${p.status!=='active'?` · <span class="badge ${p.status}">${p.status==='expired'?'Expired':'Obsolete'}</span>`:''}</div>`:''}
-                      <div class="sort-qty">Qty to sort: <b>${Number(r.qty).toLocaleString()}</b> <span class="cell-sub">· stock here ${availableAt(r.warehouseId, r.posmCode).toLocaleString()}</span></div>
-                    </div></div>
-                  <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>
-                  <div class="kcard-meta" style="margin-top:2px;"><span>${r.id}</span><span>Requested ${fmtDateShort(r.dateCreated)}</span></div>`
-                : `<div class="kcard-desc">${p?p.desc:''} · Qty ${r.qty}</div>
-                <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>`}
-                <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.dueDate?'Due '+fmtDateShort(r.dueDate):''}</span></div>
-                ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span style="display:inline-flex;align-items:center;gap:4px;">${icon('target',12)} ${r.purpose}</span></div>`:''}
-                ${r.createdBy?`<div class="kcard-meta" style="margin-top:2px;"><span>Created by ${r.createdBy}</span></div>`:''}
-                ${r.status!=='delivered' ? `<div class="kcard-actions"><button class="btn sm primary" data-advance="${r.id}" style="flex:1">${r.status==='for_sorting'?'Move to For Delivery':'Mark Delivered'}</button></div>`
-                  : c.key==='deployed' ? (()=>{ const pf = proofOf(r), nf = String(pf.flags||'').split(',').filter(Boolean).length;
-                      return `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span><span>Proof ${pf.uploadedAt?fmtDateShort(String(pf.uploadedAt).slice(0,10)):''}</span></div>
-                      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${proofChipHtml(r)}${nf?`<span class="badge obsolete" title="${escHtml(String(pf.flags).split(',').map(pkFlagLabel).join(' · '))}">${icon('alert',11)} ${nf} warning${nf!==1?'s':''}</span>`:''}</div>
-                      ${pf.uploadedBy?`<div class="kcard-meta" style="margin-top:2px;"><span>By ${escHtml(pf.uploadedBy)}</span></div>`:''}
-                      <div class="kcard-actions"><button class="btn sm ${pf.status==='for_review' && session && session.role==='admin'?'primary':''}" data-proof-view="${r.id}" style="flex:1">${icon('camera',12)} ${pf.status==='for_review' && session && session.role==='admin'?'Review proof':'View proof'}</button></div>`; })()
-                  : `<div class="kcard-meta" style="margin-top:6px"><span>Delivered ${fmtDateShort(r.dateDelivered)}</span></div>
-                     <div style="margin-top:6px;">${proofChipHtml(r)}</div>
-                     ${(proofOf(r)||{}).status==='rejected' && proofOf(r).rejectReason ? `<div class="kcard-meta" style="margin-top:2px;color:var(--danger);"><span>Reason: ${escHtml(proofOf(r).rejectReason)}</span></div>` : ''}
-                     <div class="kcard-actions">${(proofOf(r)||{}).status==='rejected' ? `<button class="btn sm" data-proof-view="${r.id}">View</button>` : ''}<button class="btn sm primary" data-proof-up="${r.id}" style="flex:1">${icon('camera',12)} Upload proof</button></div>`}
-              </div>`;
-            }).join('') || `<div class="empty-state">No requests here.</div>`}
+            ${(c.key==='for_sorting' ? sortingByTsHtml(items) : items.slice(0,25).map(reqCardHtml).join('')) || `<div class="empty-state">No requests here.</div>`}
           </div>`;
         }).join('')}
       </div>`;
@@ -5910,7 +5947,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.10-v15';
+const APP_VERSION = '2026.10.10-v16';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
