@@ -1542,7 +1542,7 @@ function applyLocalUpdate(action, payload, result){
       return true;
     }
     case 'stockOut': {
-      DATA.transactions.unshift({id:payload.id, date:payload.date, type:'out', posmCode:payload.code, warehouseId:payload.warehouseId, qty:Number(result && result.qty!==undefined ? result.qty : payload.qty), reason:payload.reason||'', ref:payload.ref||'', receiptImage:''});
+      DATA.transactions.unshift({id:payload.id, date:payload.date, type:'out', posmCode:payload.code, warehouseId:payload.warehouseId, qty:Number(result && result.qty!==undefined ? result.qty : payload.qty), reason:payload.reason||'', ref:payload.ref||'', receiptImage:payload.receiptImage||''});
       const inv = DATA.inventory.find(r=>r.warehouseId===payload.warehouseId && r.posmCode===payload.code);
       if(inv && result && result.newQty!==undefined) inv.qty = result.newQty;
       return true;
@@ -1550,7 +1550,7 @@ function applyLocalUpdate(action, payload, result){
     case 'stockBatch': {
       const isOut = payload.mode==='out';
       (payload.items||[]).forEach((it, idx)=>{
-        DATA.transactions.unshift({id:it.id, date:payload.date, type:isOut?'out':'in', posmCode:it.code, warehouseId:payload.warehouseId, qty:Number(it.qty), reason:payload.reason||'', ref:payload.ref||'', receiptImage:(!isOut && idx===0 && payload.receiptImage) ? payload.receiptImage : ''});
+        DATA.transactions.unshift({id:it.id, date:payload.date, type:isOut?'out':'in', posmCode:it.code, warehouseId:payload.warehouseId, qty:Number(it.qty), reason:payload.reason||'', ref:payload.ref||'', receiptImage:(idx===0 && payload.receiptImage) ? payload.receiptImage : ''});
         let inv = DATA.inventory.find(r=>r.warehouseId===payload.warehouseId && r.posmCode===it.code);
         if(!inv){ inv = {warehouseId:payload.warehouseId, posmCode:it.code, qty:0, beginningStock:0}; DATA.inventory.push(inv); }
         const nq = result && result.newQtys ? result.newQtys[it.code] : undefined;
@@ -2662,7 +2662,7 @@ function openStockInModal(){
 }
 /* ---- Stock Out modal (many POSM at once) ---- */
 function openStockOutModal(prefillCode, prefillReasonDispose){
-  let cart = [];
+  let cart = [], photoDataUrl = null;
   openModal('Stock Out — Remove POSM', `
     <div class="two-col">
       <div class="field"><label>Warehouse</label><select id="soWh">${whOptions()}</select></div>
@@ -2678,6 +2678,12 @@ function openStockOutModal(prefillCode, prefillReasonDispose){
         <option>Other</option>
       </select>
     </div>
+    <div class="field"><label>Stock Out Proof Photo <span style="color:var(--danger)">*required</span> <span class="cell-sub" style="font-weight:500;">— take a picture of the POSM being taken out (or the signed release / disposal slip)</span></label>
+      <input type="file" id="soPhotoFile" accept="image/*" capture="environment">
+      <div id="soPhotoPreviewWrap" style="margin-top:8px;display:none;">
+        <img id="soPhotoPreview" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--line);display:block;">
+      </div>
+    </div>
   `, `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="soSubmit" disabled></button>`, true);
   const btn = document.getElementById('soSubmit');
   let saving = false;
@@ -2685,15 +2691,29 @@ function openStockOutModal(prefillCode, prefillReasonDispose){
     if(saving) return;
     const total = cart.reduce((s,i)=>s+i.qty,0);
     btn.textContent = actionLabel('Confirm Stock Out') + (cart.length ? ` (${cart.length} POSM · ${total.toLocaleString()} pcs)` : '');
-    btn.disabled = !cart.length;
+    btn.disabled = !cart.length || !photoDataUrl;
   }
   const picker = wirePosmPicker('soPosm', {whSelectId:'soWh', mode:'out', defaultQty:1, preselect: prefillCode ? [prefillCode] : [], onChange:c=>{ cart = c; refreshBtn(); }});
   document.getElementById('soWh').addEventListener('change', picker.redraw);
+  document.getElementById('soPhotoFile').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    const wrap = document.getElementById('soPhotoPreviewWrap');
+    if(!file){ photoDataUrl = null; wrap.style.display='none'; refreshBtn(); return; }
+    try{
+      photoDataUrl = await resizeImageFile(file, 1000);
+      document.getElementById('soPhotoPreview').src = photoDataUrl;
+      wrap.style.display = '';
+    }catch(err){
+      alert('Could not process the photo. Please try again.');
+      photoDataUrl = null; wrap.style.display='none';
+    }
+    refreshBtn();
+  });
   refreshBtn();
   const startList = JSON.stringify(picker.items());
   modalGuard = {
-    isDirty: ()=> !saving && cart.length>0 && JSON.stringify(picker.items())!==startList,
-    canSave: ()=> cart.length ? '' : 'add at least one POSM',
+    isDirty: ()=> !saving && ((cart.length>0 && JSON.stringify(picker.items())!==startList) || !!photoDataUrl),
+    canSave: ()=> !cart.length ? 'add at least one POSM' : (!photoDataUrl ? 'take the stock out proof photo first' : ''),
     what: ()=> `${cart.length} POSM (${cart.reduce((s,i)=>s+i.qty,0).toLocaleString()} pcs)`,
     save: ()=> btn.click(),
   };
@@ -2704,6 +2724,7 @@ function openStockOutModal(prefillCode, prefillReasonDispose){
     const reason = document.getElementById('soReason').value;
     const items = picker.items();
     if(!items.length){ alert('Search and add at least one POSM first.'); return; }
+    if(!photoDataUrl){ alert('Please take a stock out proof photo first.'); return; }
     const empty = items.filter(it=>availableAt(whId, it.code) <= 0);
     if(empty.length){ alert(`No stock at ${whName} for: ${empty.map(i=>i.code).join(', ')}.\n\nRemove ${empty.length>1?'them':'it'} from the list (×) or pick another warehouse.`); return; }
     const short = items.filter(it=>it.qty > availableAt(whId, it.code));
@@ -2715,11 +2736,11 @@ function openStockOutModal(prefillCode, prefillReasonDispose){
       let res;
       if(items.length === 1){
         const it = items[0];
-        res = await performAction('stockOut', {id: uid('txn'), date, code: it.code, warehouseId: whId, qty: Math.min(it.qty, availableAt(whId, it.code)), reason, ref:'Manual entry'});
+        res = await performAction('stockOut', {id: uid('txn'), date, code: it.code, warehouseId: whId, qty: Math.min(it.qty, availableAt(whId, it.code)), reason, ref:'Manual entry', receiptImage: photoDataUrl});
       } else {
         const batchId = 'BATCH-' + Date.now().toString(36).toUpperCase();
         res = await performAction('stockBatch', {
-          batchId, mode:'out', warehouseId: whId, date, ref: `Manual entry · ${batchId}`, reason,
+          batchId, mode:'out', warehouseId: whId, date, ref: `Manual entry · ${batchId}`, reason, receiptImage: photoDataUrl,
           items: items.map(it=>({id: uid('txn'), code: it.code, qty: Math.min(it.qty, availableAt(whId, it.code))}))
         });
       }
@@ -3185,7 +3206,7 @@ function renderDashboard(){
   const moveCounts = movementCounts(whFilter, buFilter);
   charts.chartMoveSplit = safeChart(document.getElementById('chartMoveSplit'), {
     type:'doughnut',
-    data:{ labels:['Fast Moving','Low Moving','Non-Moving'], datasets:[{data:[moveCounts.fast,moveCounts.low,moveCounts.non], backgroundColor:[c.success,c.warning,c.ink3], borderWidth:0}]},
+    data:{ labels:['Fast Moving','Slow Moving','Non-Moving'], datasets:[{data:[moveCounts.fast,moveCounts.low,moveCounts.non], backgroundColor:[c.success,c.warning,c.ink3], borderWidth:0}]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:c.ink, boxWidth:10, padding:14, font:{size:11.5}}}} }
   });
   const weekly = weeklyMetrics(8, buFilter);
@@ -3383,18 +3404,19 @@ function txnReceipt(t){
   if(!m) return false;
   return DATA.transactions.some(x=>(x.receiptImage || x.hasReceipt) && String(x.ref||'').includes(m[0]));
 }
+function txnPhotoLabel(t){ return (t.type==='out' ? 'Stock Out Proof — ' : 'Delivery Receipt — ')+t.posmCode+' ('+fmtDate(t.date)+')'; }
 async function openTxnReceipt(t){
-  if(t.receiptImage){ openReceiptLightbox(t.receiptImage, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')'); return; }
+  if(t.receiptImage){ openReceiptLightbox(t.receiptImage, txnPhotoLabel(t)); return; }
   const m = String(t.ref||'').match(/(?:SCAN|BATCH)-[A-Z0-9]+/);
   const local = m ? DATA.transactions.find(x=>x.receiptImage && String(x.ref||'').includes(m[0])) : null;
-  if(local){ openReceiptLightbox(local.receiptImage, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')'); return; }
+  if(local){ openReceiptLightbox(local.receiptImage, txnPhotoLabel(t)); return; }
   // In a batch the photo is stored on the batch row that carries it, not on every POSM row.
   const owner = t.hasReceipt ? t : ((m && DATA.transactions.find(x=>x.hasReceipt && String(x.ref||'').includes(m[0]))) || t);
   try{
     const res = await postAction('getReceipt', Object.assign({id: owner.id}, readCreds()));
-    if(res.image) openReceiptLightbox(res.image, 'Delivery Receipt — '+t.posmCode+' ('+fmtDate(t.date)+')');
-    else alert('No receipt photo found for this entry.');
-  }catch(e){ alert(e.message || 'Could not load the receipt photo.'); }
+    if(res.image) openReceiptLightbox(res.image, txnPhotoLabel(t));
+    else alert('No photo found for this entry.');
+  }catch(e){ alert(e.message || 'Could not load the photo.'); }
 }
 function payload_sign(p){ return p && p.mode==='out' ? '−' : '+'; }
 let stockflowFilter = 'all';
@@ -3421,7 +3443,7 @@ function renderStockflow(){
         <div class="panel-actions"><button class="btn" id="btnGoScan2">${icon('scan',14)} Scan</button><button class="btn primary" id="btnStockIn2">${icon('plus',14)} Stock In</button><button class="btn" id="btnStockOut2">${icon('arrowDown',14)} Stock Out</button><button class="btn sm" id="btnExportStockflow">${icon('download',13)} Excel</button></div></div>
       <div class="filters"><div class="seg" id="sfSeg">${[['all','All'],['in','Stock In'],['out','Stock Out'],['transfer','Transfers']].map(([k,l])=>`<button data-k="${k}" class="${stockflowFilter===k?'active':''}">${l}</button>`).join('')}</div></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Date</th><th>Type</th><th>POSM</th><th>Warehouse</th><th>Qty</th><th>Reason / Reference</th><th>Receipt</th></tr></thead>
+        <thead><tr><th>Date</th><th>Type</th><th>POSM</th><th>Warehouse</th><th>Qty</th><th>Reason / Reference</th><th>Receipt / Proof</th></tr></thead>
         <tbody>
           ${txns.slice(0,60).map(t=>{
             const p = posmByCode(t.posmCode);
@@ -4014,15 +4036,15 @@ function renderMovement(){
     const d60 = dispatch60(p.code, whFilter);
     const outQty = d60.qty; const events = d60.events;
     let cat = 'non', catLabel='Non-Moving';
-    if(events>=3){ cat='fast'; catLabel='Fast Moving'; } else if(events>=1){ cat='low'; catLabel='Low Moving'; }
+    if(events>=3){ cat='fast'; catLabel='Fast Moving'; } else if(events>=1){ cat='low'; catLabel='Slow Moving'; }
     return {p, outQty, events, cat, catLabel, curQty: totalQtyForPosm(p.code, whFilter)};
   }).sort((a,b)=>b.outQty-a.outQty);
   const counts = movementCounts(whFilter, buFilter);
   const html = `
-    <details class="howto"><summary>${icon('info',15)} How movement is classified<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('alert',16)}<div>This classification is based on the number of dispatch events in the last <b>60 days</b>: <b>Fast Moving</b> (3+ dispatches), <b>Low Moving</b> (1–2 dispatches), <b>Non-Moving</b> (0 dispatches). Since the data was just loaded, everything will show as Non-Moving until dispatches are logged via Requests or Stock Out.</div></div></details>
+    <details class="howto"><summary>${icon('info',15)} How movement is classified<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('alert',16)}<div>This classification is based on the number of dispatch events in the last <b>60 days</b>: <b>Fast Moving</b> (3+ dispatches), <b>Slow Moving</b> (1–2 dispatches), <b>Non-Moving</b> (0 dispatches). Since the data was just loaded, everything will show as Non-Moving until dispatches are logged via Requests or Stock Out.</div></div></details>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Fast Moving</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('movement',16)}</div></div><div class="kpi-value">${counts.fast}</div><div class="kpi-delta flat">POSM types</div></div>
-      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Low Moving</span><div class="kpi-icon" style="background:var(--warning-bg);color:var(--warning)">${icon('movement',16)}</div></div><div class="kpi-value">${counts.low}</div><div class="kpi-delta flat">POSM types</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Slow Moving</span><div class="kpi-icon" style="background:var(--warning-bg);color:var(--warning)">${icon('movement',16)}</div></div><div class="kpi-value">${counts.low}</div><div class="kpi-delta flat">POSM types</div></div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Non-Moving</span><div class="kpi-icon" style="background:var(--surface-alt);color:var(--ink-soft)">${icon('box',16)}</div></div><div class="kpi-value">${counts.non}</div><div class="kpi-delta down">Review — may need disposal</div></div>
     </div>
     <div class="panel" style="margin-bottom:16px;"><div class="panel-head"><div><h3>Dispatch Activity per POSM (60 days)</h3></div></div><div class="chart-wrap tall"><canvas id="chartMoveBar"></canvas></div></div>
@@ -4537,7 +4559,7 @@ async function exportAnalyticsReport(asPdf){
     const txnRows = DATA.transactions.map(t=>({
       Date:t.date, Type:t.type, 'POSM Code':t.posmCode, Description:(posmByCode(t.posmCode)||{}).desc||'',
       Warehouse:(whById(t.warehouseId)||{}).name||'', 'Qty Change':(t.type==='in'||t.type==='transfer_in'?'+':'-')+t.qty,
-      Reason:t.reason, Reference:t.ref||'', 'Has Receipt Photo':(t.receiptImage||t.hasReceipt)?'Yes':'No'
+      Reason:t.reason, Reference:t.ref||'', 'Has Receipt / Proof Photo':(t.receiptImage||t.hasReceipt)?'Yes':'No'
     }));
     sheets.push({name:'Stock Movements', rows:txnRows});
 
@@ -4576,7 +4598,7 @@ async function exportAnalyticsReport(asPdf){
     const moveRows = DATA.posmMaster.map(p=>{
       const d60 = dispatch60(p.code, 'all');
       const outQty = d60.qty, events = d60.events;
-      const cat = events>=3?'Fast Moving':events>=1?'Low Moving':'Non-Moving';
+      const cat = events>=3?'Fast Moving':events>=1?'Slow Moving':'Non-Moving';
       return {'POSM Code':p.code, Description:p.desc, Category:cat, 'Dispatch Events (60d)':events, 'Qty Dispatched (60d)':outQty, 'Current Stock':totalQtyForPosm(p.code,'all')};
     });
     sheets.push({name:'Movement Analysis', rows:moveRows});
@@ -5972,7 +5994,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.10-v18';
+const APP_VERSION = '2026.10.11-v20';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
