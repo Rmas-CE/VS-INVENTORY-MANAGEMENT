@@ -3748,6 +3748,10 @@ function renderRejected(){
 }
 
 /* ============================= METRICS HELPERS ============================= */
+// On-time rate = delivered on or before the due date ÷ everything delivered in that period.
+// null when nothing was delivered (shown as "—"), so it can never go above 100%.
+function onTimeRate(delivered, late){ return delivered ? Math.round(((delivered-late)/delivered)*100) : null; }
+function fmtRate(r){ return r==null ? '—' : r+'%'; }
 function weeklyMetrics(n, buFilter){
   buFilter = buFilter || 'all';
   const weeks = [];
@@ -3760,7 +3764,7 @@ function weeklyMetrics(n, buFilter){
     const created = DATA.requests.filter(r=> isoWeekLabel(r.dateCreated)===w.key && (buFilter==='all'||matchesBUFilter(r.posmCode)));
     const delivered = DATA.requests.filter(r=> r.status==='delivered' && r.dateDelivered && isoWeekLabel(r.dateDelivered)===w.key && (buFilter==='all'||matchesBUFilter(r.posmCode)));
     const late = delivered.filter(r=> new Date(r.dateDelivered) > new Date(r.dueDate));
-    return {label:w.label, created:created.length, delivered:delivered.length, late:late.length, rate: created.length? Math.round((delivered.length/created.length)*100) : 0 };
+    return {label:w.label, created:created.length, delivered:delivered.length, late:late.length, rate: onTimeRate(delivered.length, late.length) };
   });
 }
 function monthlyMetrics(n, buFilter){
@@ -3771,7 +3775,7 @@ function monthlyMetrics(n, buFilter){
     const created = DATA.requests.filter(r=> monthKey(r.dateCreated)===m.key && (buFilter==='all'||matchesBUFilter(r.posmCode)));
     const delivered = DATA.requests.filter(r=> r.status==='delivered' && r.dateDelivered && monthKey(r.dateDelivered)===m.key && (buFilter==='all'||matchesBUFilter(r.posmCode)));
     const late = delivered.filter(r=> new Date(r.dateDelivered) > new Date(r.dueDate));
-    return {label:m.label, created:created.length, delivered:delivered.length, late:late.length, rate: created.length? Math.round((delivered.length/created.length)*100) : 0 };
+    return {label:m.label, created:created.length, delivered:delivered.length, late:late.length, rate: onTimeRate(delivered.length, late.length) };
   });
 }
 
@@ -3780,15 +3784,15 @@ let metricsRange = 'weekly';
 function renderMetrics(){
   const buFilter = currentFilterBU();
   const data = metricsRange==='weekly' ? weeklyMetrics(8, buFilter) : monthlyMetrics(6, buFilter);
-  const latest = data[data.length-1], prev = data[data.length-2] || {rate:0,late:0,delivered:0};
-  const rateDelta = latest.rate - prev.rate; const lateDelta = latest.late - prev.late;
+  const latest = data[data.length-1], prev = data[data.length-2] || {rate:null,late:0,delivered:0};
+  const rateDelta = (latest.rate!=null && prev.rate!=null) ? latest.rate - prev.rate : null; const lateDelta = latest.late - prev.late;
   const currentlyOverdue = getOverdueRequests().filter(r=>matchesBUFilter(r.posmCode));
   const tsStats = tsNamesArray().map(ts=>{
     const reqs = DATA.requests.filter(r=>r.ts===ts && matchesBUFilter(r.posmCode));
     const delivered = reqs.filter(r=>r.status==='delivered');
     const late = delivered.filter(r=>r.dateDelivered && r.dueDate && new Date(r.dateDelivered)>new Date(r.dueDate));
-    return {ts, total:reqs.length, delivered:delivered.length, late:late.length, rate: reqs.length? Math.round((delivered.length/reqs.length)*100):0};
-  }).filter(t=>t.total>0).sort((a,b)=>b.rate-a.rate);
+    return {ts, total:reqs.length, delivered:delivered.length, late:late.length, rate: onTimeRate(delivered.length, late.length)};
+  }).filter(t=>t.total>0).sort((a,b)=>(b.rate==null?-1:b.rate)-(a.rate==null?-1:a.rate) || b.delivered-a.delivered);
 
   const html = `
     <div class="panel-head" style="margin-bottom:14px;">
@@ -3796,13 +3800,13 @@ function renderMetrics(){
       <div class="seg"><button data-r="weekly" class="${metricsRange==='weekly'?'active':''}">Weekly</button><button data-r="monthly" class="${metricsRange==='monthly'?'active':''}">Monthly</button></div>
     </div>
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">On-time Delivery Rate</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('metrics',16)}</div></div><div class="kpi-value">${latest.rate}%</div><div class="kpi-delta ${rateDelta>=0?'up':'down'}">${rateDelta>=0?'+':''}${rateDelta} pts vs last ${metricsRange==='weekly'?'week':'month'}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">On-time Delivery Rate</span><div class="kpi-icon" style="background:var(--primary-tint);color:var(--primary-ink)">${icon('metrics',16)}</div></div><div class="kpi-value">${fmtRate(latest.rate)}</div>${latest.rate==null ? `<div class="kpi-delta flat">No deliveries yet this ${metricsRange==='weekly'?'week':'month'}</div>` : rateDelta==null ? `<div class="kpi-delta flat">Delivered on or before the due date</div>` : `<div class="kpi-delta ${rateDelta>=0?'up':'down'}">${rateDelta>=0?'+':''}${rateDelta} pts vs last ${metricsRange==='weekly'?'week':'month'}</div>`}</div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Delivered</span><div class="kpi-icon" style="background:var(--success-bg);color:var(--success)">${icon('check',16)}</div></div><div class="kpi-value">${latest.delivered}</div><div class="kpi-delta flat">This ${metricsRange==='weekly'?'week':'month'}</div></div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Lapses (Late)</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('clock',16)}</div></div><div class="kpi-value">${latest.late}</div><div class="kpi-delta ${lateDelta<=0?'up':'down'}">${lateDelta>=0?'+':''}${lateDelta} vs last ${metricsRange==='weekly'?'week':'month'}</div></div>
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Currently Overdue</span><div class="kpi-icon" style="background:var(--danger-bg);color:var(--danger)">${icon('alert',16)}</div></div><div class="kpi-value">${currentlyOverdue.length}</div><div class="kpi-delta ${currentlyOverdue.length?'down':'up'}">Still "For Delivery" past their 1-week due date</div></div>
     </div>
     <div class="section-row cols-2">
-      <div class="panel"><div class="panel-head"><div><h3>Delivery Rate Trend</h3><div class="panel-sub">% of requests delivered on time</div></div></div><div class="chart-wrap"><canvas id="chartRateTrend"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><div><h3>Delivery Rate Trend</h3><div class="panel-sub">% of deliveries made on or before the due date</div></div></div><div class="chart-wrap"><canvas id="chartRateTrend"></canvas></div></div>
       <div class="panel"><div class="panel-head"><div><h3>Delivered vs Lapses</h3></div></div><div class="chart-wrap"><canvas id="chartDelLapses"></canvas></div></div>
     </div>
     ${currentlyOverdue.length ? `
@@ -3825,16 +3829,16 @@ function renderMetrics(){
       <div class="table-wrap"><table><thead><tr><th>Trade Supervisor</th><th>Total Requests</th><th>Delivered</th><th>Late</th><th>On-time Rate</th></tr></thead>
         <tbody>
         ${tsStats.map(t=>`<tr><td class="cell-main">${t.ts}</td><td>${t.total}</td><td>${t.delivered}</td><td>${t.late>0?`<span class="badge late">${t.late}</span>`:'0'}</td>
-          <td><div style="display:flex;align-items:center;gap:8px;"><div class="pbar" style="width:80px;"><div style="width:${t.rate}%"></div></div><span class="cell-sub">${t.rate}%</span></div></td></tr>`).join('') || `<tr><td colspan="5" class="empty-state">No logged requests yet.</td></tr>`}
+          <td><div style="display:flex;align-items:center;gap:8px;"><div class="pbar" style="width:80px;"><div style="width:${t.rate||0}%"></div></div><span class="cell-sub">${fmtRate(t.rate)}</span></div></td></tr>`).join('') || `<tr><td colspan="5" class="empty-state">No logged requests yet.</td></tr>`}
         </tbody></table></div>
     </div>
   `;
   document.getElementById('content').innerHTML = html;
   document.querySelectorAll('.seg [data-r]').forEach(b=>b.addEventListener('click',()=>{ metricsRange=b.dataset.r; renderMetrics(); }));
   document.getElementById('btnExportMetrics').addEventListener('click', ()=>{
-    const exportRows = tsStats.map(t=>({'Trade Supervisor':t.ts, 'Total Requests':t.total, Delivered:t.delivered, Late:t.late, 'On-time Rate %':t.rate}));
+    const exportRows = tsStats.map(t=>({'Trade Supervisor':t.ts, 'Total Requests':t.total, Delivered:t.delivered, Late:t.late, 'On-time Rate %':t.rate==null?'':t.rate}));
     exportSheetsToExcel([
-      {name:(metricsRange==='weekly'?'Weekly':'Monthly')+' Trend', rows:data.map(d=>({Period:d.label, Created:d.created, Delivered:d.delivered, Late:d.late, 'Rate %':d.rate}))},
+      {name:(metricsRange==='weekly'?'Weekly':'Monthly')+' Trend', rows:data.map(d=>({Period:d.label, Created:d.created, Delivered:d.delivered, Late:d.late, 'On-time Rate %':d.rate==null?'':d.rate}))},
       {name:'TS Performance', rows:exportRows},
       {name:'Currently Overdue', rows:currentlyOverdue.map(r=>{const p=posmByCode(r.posmCode); return {'POSM Code':r.posmCode, Description:p?p.desc:'', Store:r.store, 'Trade Supervisor':r.ts, 'Due Date':r.dueDate};})}
     ], 'Metrics-'+todayStr()+'.xlsx');
@@ -3843,8 +3847,8 @@ function renderMetrics(){
   destroyCharts(['chartRateTrend','chartDelLapses']);
   const c = getChartColors();
   charts.chartRateTrend = safeChart(document.getElementById('chartRateTrend'), {
-    type:'line', data:{ labels:data.map(d=>d.label), datasets:[{label:'On-time rate %', data:data.map(d=>d.rate), borderColor:c.primary, backgroundColor:c.primaryTint, tension:.35, fill:true, pointRadius:3}]},
-    options: baseChartOpts(c,{legend:false}, true)
+    type:'line', data:{ labels:data.map(d=>d.label), datasets:[{label:'On-time rate %', data:data.map(d=>d.rate), borderColor:c.primary, backgroundColor:c.primaryTint, tension:.35, fill:true, pointRadius:3, spanGaps:true}]},
+    options: (()=>{ const o = baseChartOpts(c,{legend:false}); o.scales.y.max = 100; return o; })()
   });
   charts.chartDelLapses = safeChart(document.getElementById('chartDelLapses'), {
     type:'bar', data:{ labels:data.map(d=>d.label), datasets:[
@@ -4270,7 +4274,8 @@ async function viewPendingDetail(id){
     const p = neutralizeDeep(res.payload || {}, '');
     res.submittedBy = neutralizeText(res.submittedBy);
     const images = [];
-    if(safeImgSrc(p.receiptImage)) images.push({label:'Delivery Receipt', src:safeImgSrc(p.receiptImage)});
+    const isOutPhoto = res.action==='stockOut' || (res.action==='stockBatch' && p.mode==='out');
+    if(safeImgSrc(p.receiptImage)) images.push({label: isOutPhoto ? 'Stock Out Proof Photo' : 'Delivery Receipt', src:safeImgSrc(p.receiptImage)});
     if(safeImgSrc(p.newPosmImage)) images.push({label:'New POSM Photo', src:safeImgSrc(p.newPosmImage)});
     openModal('Submission Detail', `
       <div class="field"><label>Action</label><div class="cell-main">${pendingActionTypeLabel(res.action)}</div></div>
@@ -4587,10 +4592,10 @@ async function exportAnalyticsReport(asPdf){
     }));
     sheets.push({name:'Transfers', rows:trfRows});
 
-    const weeklyRows = weeklyMetrics(8).map(w=>({Week:w.label, 'Requests Created':w.created, Delivered:w.delivered, Late:w.late, 'On-time Rate %':w.rate}));
+    const weeklyRows = weeklyMetrics(8).map(w=>({Week:w.label, 'Requests Created':w.created, Delivered:w.delivered, Late:w.late, 'On-time Rate %':w.rate==null?'':w.rate}));
     sheets.push({name:'Weekly Metrics', rows:weeklyRows});
 
-    const monthlyRows = monthlyMetrics(6).map(m=>({Month:m.label, 'Requests Created':m.created, Delivered:m.delivered, Late:m.late, 'On-time Rate %':m.rate}));
+    const monthlyRows = monthlyMetrics(6).map(m=>({Month:m.label, 'Requests Created':m.created, Delivered:m.delivered, Late:m.late, 'On-time Rate %':m.rate==null?'':m.rate}));
     sheets.push({name:'Monthly Metrics', rows:monthlyRows});
 
     const begRows = WAREHOUSES.map(w=>{
@@ -5999,7 +6004,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.11-v21';
+const APP_VERSION = '2026.10.12-v22';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
