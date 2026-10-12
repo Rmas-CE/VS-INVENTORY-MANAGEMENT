@@ -224,6 +224,11 @@ body.mobile-app .kcol-scroll{max-height:calc(var(--vh) * 72);}
 .kcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow);}
 .kcard-top{display:flex;justify-content:space-between;gap:6px;} .kcard-code{font-weight:700;font-size:12.5px;}
 .kcard-desc{font-size:11.5px;color:var(--ink-soft);margin-top:3px;}
+.save-queue-pill{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(30px);opacity:0;pointer-events:none;z-index:120;background:#12141A;color:#fff;border-radius:22px;padding:9px 16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:9px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:all .2s;}
+.save-queue-pill.show{opacity:1;transform:translateX(-50%) translateY(0);}
+body.mobile-app .save-queue-pill{bottom:calc(84px + env(safe-area-inset-bottom,0px));}
+.sq-spin{width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:sqspin .8s linear infinite;}
+@keyframes sqspin{to{transform:rotate(360deg);}}
 .kcard.opening{border-left:4px solid #E8A317;background:linear-gradient(90deg,#FFF6E3 0,var(--surface) 70%);}
 .badge.opening{background:#FFF0CC;color:#8A5A00;border:1px solid #F3D9A4;}
 .ts-group{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px;margin-bottom:10px;}
@@ -1062,6 +1067,7 @@ function loadDataCache(){
 let ALERTS = null; // cached alert snapshot: pending approvals, overdue/due-soon deliveries, low-stock reorder items
 let loadSeq = 0, appliedLoadSeq = 0;
 async function loadFromServer(silent, _retry){
+  if(silent && typeof saveQueue!=='undefined' && saveQueue.n > 0) return;   // refreshed once the saves finish
   if(!silent) setSyncStatus('refreshing');
   const startEpoch = mutationEpoch, mySeq = ++loadSeq;
   // Data is only given to a logged-in account (Admin password or region login).
@@ -2868,41 +2874,63 @@ function openNewTransferModal(){
   });
 }
 /* ============================= ACTIONS ============================= */
-// A second tap while the first one is still saving is ignored (prevents double submissions).
-const advancing = new Set();
-async function advanceRequest(id){
-  if(advancing.has(id)) return;
-  advancing.add(id);
-  try{ await advanceRequestNow(id); } finally { advancing.delete(id); }
+/* ---- Fast actions ----
+   Approve / Reject / Move to For Delivery / Mark Delivered / transfer steps update the screen
+   at once, and the saves to Google Sheets run one after another in the background, in the
+   order they were clicked. So you can click the next one right away. A save that fails is
+   reported and the screen reloads the real data from the Sheet. */
+const saveQueue = { chain: Promise.resolve(), n: 0, failedAny: false };
+function updateSaveQueuePill(){
+  let el = document.getElementById('saveQueuePill');
+  if(!el){ el = document.createElement('div'); el.id = 'saveQueuePill'; el.className = 'save-queue-pill'; el.setAttribute('role','status'); document.body.appendChild(el); }
+  if(saveQueue.n > 0){ el.innerHTML = `<span class="sq-spin"></span>Saving ${saveQueue.n} ${vsPl(saveQueue.n,'change','changes')}…`; el.classList.add('show'); }
+  else { el.classList.remove('show'); }
 }
-async function advanceTransfer(id){
-  if(advancing.has(id)) return;
-  advancing.add(id);
-  try{ await advanceTransferNow(id); } finally { advancing.delete(id); }
+function queueSave(label, run){
+  saveQueue.n++; updateSaveQueuePill();
+  const job = saveQueue.chain.then(()=>run());
+  saveQueue.chain = job.catch(e=>{
+      saveQueue.failedAny = true;
+      alert(`Not saved: ${label}\n\n${(e && e.message) || 'Please try again.'}\n\nThe screen will now show the latest data from the Google Sheet.`);
+    }).finally(()=>{
+      saveQueue.n--; updateSaveQueuePill();
+      if(!saveQueue.n){ saveQueue.failedAny = false; loadFromServer(true).catch(()=>{}); }
+    });
+  return job;
 }
-async function advanceRequestNow(id){
+window.addEventListener('beforeunload', e=>{ if(saveQueue.n > 0){ e.preventDefault(); e.returnValue = ''; } });
+function postAsMe(action, payload){
+  return postAction(action, Object.assign({adminPassword: session.password, performedBy: session.name, createdBy: session.name}, payload));
+}
+function advanceRequest(id){
   const r = DATA.requests.find(x=>x.id===id);
-  if(!r) return;
-  if(r.status==='for_sorting'){
-    try{ const res = await performAction('advanceRequest', {id, date: todayStr()}); notifyIfPending(res); }catch(e){ alert('Could not update the request.\n\n' + ((e && e.message) || 'Please try again.')); }
-  } else if(r.status==='for_delivery'){
-    const deliveredDate = todayStr();
-    try{ const res = await performAction('advanceRequest', {id, date: deliveredDate, txnId: uid('txn')}); notifyIfPending(res); }
-      catch(e){ alert('Could not update the request.\n\n' + ((e && e.message) || 'Please try again.')); }
+  if(!r || !(r.status==='for_sorting' || r.status==='for_delivery')) return;
+  const toDelivery = r.status==='for_sorting';
+  const payload = toDelivery ? {id, date: todayStr()} : {id, date: todayStr(), txnId: uid('txn')};
+  const label = `${r.posmCode} (${r.store}) → ${toDelivery ? 'For Delivery' : 'Delivered'}`;
+  if(!session || session.role!=='admin'){
+    // Region account: goes to Admin approval; the card stays until Admin approves.
+    queueSave(label, async ()=>{ const res = await performAction('advanceRequest', payload); if(res && res.applied===false) showToast('Sent to Admin for approval: ' + label); });
+    return;
   }
+  const predicted = toDelivery ? {status:'for_delivery', dueDate: addDays(payload.date, 7)} : {status:'delivered'};
+  applyLocalUpdate('advanceRequest', payload, predicted); mutationEpoch++;
+  renderAll();
+  queueSave(label, async ()=>{ const res = await postAsMe('advanceRequest', payload); if(res && res.dueDate) r.dueDate = res.dueDate; });
 }
-async function advanceTransferNow(id){
+function advanceTransfer(id){
   const t = DATA.transfers.find(x=>x.id===id);
-  if(!t) return;
-  if(t.status==='pending'){
-    try{ const res = await performAction('advanceTransfer', {id, date: todayStr()}); notifyIfPending(res); }catch(e){ alert('Could not update the transfer.\n\n' + ((e && e.message) || 'Please try again.')); }
-  } else if(t.status==='in_transit'){
-    const completedDate = todayStr();
-    try{
-        const res = await performAction('advanceTransfer', {id, date: completedDate, txnOutId: uid('txn'), txnInId: uid('txn')});
-        notifyIfPending(res);
-      }catch(e){ alert('Could not update the transfer.\n\n' + ((e && e.message) || 'Please try again.')); }
+  if(!t || !(t.status==='pending' || t.status==='in_transit')) return;
+  const toTransit = t.status==='pending';
+  const payload = toTransit ? {id, date: todayStr()} : {id, date: todayStr(), txnOutId: uid('txn'), txnInId: uid('txn')};
+  const label = `Transfer ${t.posmCode} → ${toTransit ? 'In Transit' : 'Completed'}`;
+  if(!session || session.role!=='admin'){
+    queueSave(label, async ()=>{ const res = await performAction('advanceTransfer', payload); if(res && res.applied===false) showToast('Sent to Admin for approval: ' + label); });
+    return;
   }
+  applyLocalUpdate('advanceTransfer', payload, {status: toTransit ? 'in_transit' : 'completed'}); mutationEpoch++;
+  renderAll();
+  queueSave(label, ()=>postAsMe('advanceTransfer', payload));
 }
 function disposeItem(code){ openStockOutModal(code, true); }
 async function changeStatus(code, status){
@@ -4247,35 +4275,33 @@ function pendingActionTypeLabel(action){
   return map[action] || action;
 }
 
-async function reviewPendingItem(id, decision){
+function reviewPendingItem(id, decision){
+  const item = (DATA.pendingActions||[]).find(p=>p.id===id);
+  if(!item || item.status!=='pending') return;
   let reason = '';
   if(decision==='reject'){
-    reason = prompt('Optional: reason for rejecting (can be left blank)') || '';
-  } else {
-    if(!confirm('Approve and apply this action?')) return;
+    const r = prompt('Reason for rejecting (optional — press OK to skip)');
+    if(r === null) return;                 // Cancel = do nothing
+    reason = r;
   }
-  try{
+  // Update the list at once; the Sheet is updated in the background (in click order).
+  item.status = decision==='approve' ? 'approved' : 'rejected';
+  item.reviewedBy = session.name; item.reviewedAt = new Date().toISOString();
+  if(decision==='reject') item.rejectReason = reason;
+  mutationEpoch++; renderAll();
+  const label = `${decision==='approve' ? 'Approve' : 'Reject'} — ${describePendingAction(item)}`;
+  queueSave(label, async ()=>{
     const res = await postAction('reviewPending', {id, decision, reviewedBy: session.name, adminPassword: session.password, reason});
-    const item = (DATA.pendingActions||[]).find(p=>p.id===id);
-    if(item){
-      item.status = decision==='approve' ? 'approved' : 'rejected';
-      item.reviewedBy = session.name;
-      item.reviewedAt = new Date().toISOString();
-      if(decision==='reject') item.rejectReason = reason;
-    }
-    let patched = true;
     if(decision==='approve' && res.action){
-      patched = applyLocalUpdate(res.action, res.payload||{}, res.result);
+      applyLocalUpdate(res.action, res.payload||{}, res.result);
     } else if(decision==='reject' && (res.action==='advanceRequest' || res.action==='advanceTransfer')){
-      // Mirrors the backend: a rejected advance marks the underlying
-      // request/transfer 'rejected' so it drops off the active board.
+      // Mirrors the backend: a rejected advance marks the request/transfer 'rejected'.
       const targetId = res.payload && res.payload.id;
-      const list = res.action==='advanceRequest' ? DATA.requests : DATA.transfers;
-      const target = targetId && list.find(x=>x.id===targetId);
-      if(target) target.status = 'rejected'; else patched = false;
+      const target = targetId && (res.action==='advanceRequest' ? DATA.requests : DATA.transfers).find(x=>x.id===targetId);
+      if(target) target.status = 'rejected';
     }
-    if(patched) renderAll(); else await loadFromServer(true);
-  }catch(e){ alert('Could not process: ' + e.message); }
+    requestBackgroundRender();
+  });
 }
 
 async function viewPendingDetail(id){
@@ -6047,7 +6073,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.12-v25';
+const APP_VERSION = '2026.10.12-v26';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
