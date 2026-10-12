@@ -2927,8 +2927,10 @@ function alertLowStockList(){
   if(whF && whF!=='all'){ const w = whById(whF); groups = [{name: w ? w.name : whF, whs: new Set([whF])}]; }
   else if(isRegionUser()){ groups = [{name: session.region, whs: new Set(WAREHOUSES.map(w=>w.id))}]; }
   else {
-    groups = sortRegions([...new Set(WAREHOUSES.map(w=>w.region))])
-      .map(r=>({name:r, whs:new Set(WAREHOUSES.filter(w=>w.region===r).map(w=>w.id))}));
+    // Admin: a POSM is low only when ALL warehouses in view together have the threshold or less
+    // (no per-region rows — a POSM with plenty of stock elsewhere is not a reorder item).
+    const regs = [...new Set(WAREHOUSES.map(w=>w.region))];
+    groups = [{name: regs.length===1 ? regs[0] : 'All warehouses', whs: new Set(WAREHOUSES.map(w=>w.id))}];
   }
   invIndex();
   const active = DATA.posmMaster.filter(p=>p.status==='active' && matchesBUFilter(p.code));
@@ -2940,8 +2942,6 @@ function alertLowStockList(){
     });
   });
   out.sort((a,b)=>a.qty-b.qty || a.gi-b.gi || a.p.code.localeCompare(b.p.code));
-  out.groupCount = groups.length;
-  out.regionsAffected = new Set(out.map(x=>x.where)).size;
   return out;
 }
 function alertSortingList(){
@@ -2964,11 +2964,9 @@ function stockWhere(code){
 // so the report stays short. Excel keeps the full breakdown.
 function adminPdf(){ return !!(session && session.role==='admin'); }
 function lowStockPdfRows(list){
-  const th = alertThreshold(), byCode = new Map();
-  list.forEach(x=>{ const g = byCode.get(x.p.code) || {p:x.p, regions:0}; g.regions++; byCode.set(x.p.code, g); });
-  return [...byCode.values()].map(g=>({'POSM Code':g.p.code, Description:g.p.desc, Model:g.p.model||'', Type:g.p.type||'', 'Business Unit':buLabel(g.p.bu),
-      'Regions Low':g.regions, 'Total Qty (all warehouses)':totalQtyForPosm(g.p.code,'all'), 'Reorder Level':th}))
-    .sort((a,b)=>a['Total Qty (all warehouses)']-b['Total Qty (all warehouses)'] || b['Regions Low']-a['Regions Low']);
+  const th = alertThreshold();
+  return list.map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', Type:x.p.type||'', 'Business Unit':buLabel(x.p.bu),
+      'Total Qty (all warehouses)':x.qty, 'Reorder Level':th}));
 }
 function openAlertDetail(kind){
   const scopeTxt = escHtml(pdfScopeLabel());
@@ -2976,10 +2974,9 @@ function openAlertDetail(kind){
   if(kind==='lowstock'){
     const list = alertLowStockList(), th = alertThreshold();
     const out = list.filter(x=>x.qty<=0).length;
-    const multi = list.groupCount > 1;
     title = `Low Stock — ${list.length} item${list.length!==1?'s':''}`;
-    intro = (multi ? `Each region is checked on its own: a POSM is listed for every region where it has <b>${th} pcs or less</b> (${list.regionsAffected} ${vsPl(list.regionsAffected,'region','regions')} affected)`
-                   : `Active POSM with <b>${th} pcs or less</b> in <b>${escHtml(list.length ? list[0].where : '')}</b>`)
+    const scope = list.length ? list[0].where : '';
+    intro = `Active POSM with <b>${th} pcs or less</b> ${scope==='All warehouses' ? 'in <b>all warehouses combined</b>' : `in <b>${escHtml(scope)}</b>`}`
           + `${out?` — <b style="color:var(--danger);">${out} are out of stock</b>`:''}. Lowest first.`;
     table = `<table class="inv-table"><thead><tr><th>POSM</th><th>BU</th><th>Low in</th><th style="text-align:right;">Qty left</th><th>Where the stock is (all warehouses)</th></tr></thead><tbody>
       ${list.map(x=>`<tr><td><div class="row-flex">${tile(x.p,30)}<div><div class="cell-main">${x.p.code}</div><div class="cell-sub">${x.p.desc}</div>${modelHtml(x.p)}</div></div></td>
@@ -3087,9 +3084,7 @@ function renderAlertPanel(){
   const proofRevN = proofReviewList().length;
   if(proofRevN) items.push({icon:'camera', color:'warning', label: isAdmin ? `${proofRevN} ${vsPl(proofRevN,'proof','proofs')} of deployment waiting for your review` : `${proofRevN} deployed ${vsPl(proofRevN,'request','requests')} waiting for Admin to verify the proof`, nav:'proofreview'});
   const low = isAdmin ? alertLowStockList() : [];
-  if(low.length) items.push({icon:'box', color:'danger', label: low.groupCount>1
-      ? `${low.length} low-stock ${vsPl(low.length,'item','items')} across ${low.regionsAffected} ${vsPl(low.regionsAffected,'region','regions')} — ${alertThreshold()} pcs or less in that region`
-      : `${low.length} POSM ${vsPl(low.length,'item','items')} at or below ${alertThreshold()} units — consider reordering`, nav:'lowstock'});
+  if(low.length) items.push({icon:'box', color:'danger', label: `${low.length} POSM ${vsPl(low.length,'item','items')} at or below ${alertThreshold()} units — consider reordering`, nav:'lowstock'});
   if(!items.length){
     return `<div class="notice" style="background:var(--success-bg);border-color:color-mix(in srgb, var(--success) 30%, transparent);color:var(--success);">${icon('check',16)}<div><b>All clear</b> — ${isAdmin ? 'no pending approvals, requests, overdue deliveries, missing proofs or low-stock items right now.' : 'no pending requests, deliveries or proofs right now.'}</div></div>`;
   }
@@ -6052,7 +6047,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.12-v24';
+const APP_VERSION = '2026.10.12-v25';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
