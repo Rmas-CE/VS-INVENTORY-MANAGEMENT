@@ -2960,6 +2960,16 @@ function stockWhere(code){
   if(!rows.length) return '<span style="color:var(--danger);font-weight:600;">Out of stock everywhere</span>';
   return rows.slice(0,3).map(r=>{ const w = whById(r.warehouseId); return escHtml(w?w.name:r.warehouseId)+' <b>'+r.qty.toLocaleString()+'</b>'; }).join(' · ') + (rows.length>3 ? ` · <span class="cell-sub">+${rows.length-3} more</span>` : '');
 }
+// Admin PDFs list each POSM once with its total quantity (no per-region / per-warehouse rows),
+// so the report stays short. Excel keeps the full breakdown.
+function adminPdf(){ return !!(session && session.role==='admin'); }
+function lowStockPdfRows(list){
+  const th = alertThreshold(), byCode = new Map();
+  list.forEach(x=>{ const g = byCode.get(x.p.code) || {p:x.p, regions:0}; g.regions++; byCode.set(x.p.code, g); });
+  return [...byCode.values()].map(g=>({'POSM Code':g.p.code, Description:g.p.desc, Model:g.p.model||'', Type:g.p.type||'', 'Business Unit':buLabel(g.p.bu),
+      'Regions Low':g.regions, 'Total Qty (all warehouses)':totalQtyForPosm(g.p.code,'all'), 'Reorder Level':th}))
+    .sort((a,b)=>a['Total Qty (all warehouses)']-b['Total Qty (all warehouses)'] || b['Regions Low']-a['Regions Low']);
+}
 function openAlertDetail(kind){
   const scopeTxt = escHtml(pdfScopeLabel());
   let title='', intro='', table='', exportRows=[], exportName='', goBtn='';
@@ -3052,7 +3062,8 @@ function openAlertDetail(kind){
     ${exportRows.length ? `<div class="table-wrap scroll-y" style="max-height:58vh;">${table}</div>` : '<div class="empty-state">Nothing here right now.</div>'}
   `, `<button class="btn ghost" onclick="closeModal()">Close</button>${exportRows.length ? `<button class="btn" id="alExcel">${icon('download',13)} Excel</button>` : ''}${goBtn}`, 'xl');
   const ex = document.getElementById('alExcel');
-  if(ex) ex.addEventListener('click', ()=> exportRowsToExcel(exportRows, exportName+'-'+todayStr()+'.xlsx', title.split(' — ')[0], {photos: kind==='lowstock'}));
+  if(ex) ex.addEventListener('click', ()=> exportRowsToExcel(exportRows, exportName+'-'+todayStr()+'.xlsx', title.split(' — ')[0],
+    {photos: kind==='lowstock', pdfRows: (kind==='lowstock' && adminPdf()) ? lowStockPdfRows(alertLowStockList()) : null}));
   const go = document.getElementById('alGo');
   if(go) go.addEventListener('click', ()=>{ closeModal(); currentSection = go.dataset.go; renderAll(); });
   document.querySelectorAll('[data-al-proof-up]').forEach(b=>b.addEventListener('click', ()=>{ closeModal(); openProofUploadModal(b.dataset.alProofUp); }));
@@ -3161,7 +3172,12 @@ function renderDashboard(){
           Warehouse:w?w.name:r.warehouseId, Region:w?w.region:'', 'Qty for Disposal':r.qty});
       });
     });
-    exportRowsToExcel(rows, 'For-Disposal-Obsolete-'+todayStr()+'.xlsx', 'For Disposal (Obsolete)', {photos:true});
+    const pdfRows = adminPdf() ? disposeItems.map(p=>{
+        const whs = DATA.inventory.filter(r=>r.posmCode===p.code && r.qty>0 && (whFilter==='all'||r.warehouseId===whFilter));
+        return {'POSM Code':p.code, Description:p.desc, Model:p.model||'', 'Business Unit':buLabel(p.bu), Type:p.type||'', Status:'Obsolete',
+          Warehouses:whs.length, 'Total Qty for Disposal':whs.reduce((s,r)=>s+r.qty,0)};
+      }).sort((a,b)=>b['Total Qty for Disposal']-a['Total Qty for Disposal']) : null;
+    exportRowsToExcel(rows, 'For-Disposal-Obsolete-'+todayStr()+'.xlsx', 'For Disposal (Obsolete)', {photos:true, pdfRows});
   });
   document.querySelectorAll('[data-kpi-go]').forEach(card=>card.addEventListener('click',()=>{
     const go = card.dataset.kpiGo;
@@ -3186,7 +3202,7 @@ function renderDashboard(){
     ];
     if(isAdmin){
       sheets.unshift({name:'Pending Approvals', rows:(DATA.pendingActions||[]).filter(x=>x.status==='pending').map(x=>({ID:x.id, Action:pendingActionTypeLabel(x.action), Details:describePendingAction(x), 'Submitted By':x.submittedBy, 'Submitted At':x.submittedAt}))});
-      sheets.push({name:'Low Stock (Reorder)', photos:true, rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, Threshold:alertThreshold()}))});
+      sheets.push({name:'Low Stock (Reorder)', photos:true, pdfRows: adminPdf() ? lowStockPdfRows(alertLowStockList()) : null, rows:alertLowStockList().map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', 'Business Unit':buLabel(x.p.bu), 'Low In':x.where, 'Qty Left':x.qty, Threshold:alertThreshold()}))});
     }
     exportSheetsToExcel(sheets, 'Alerts-'+todayStr()+'.xlsx');
   });
@@ -4498,7 +4514,7 @@ function renderSection(sectionChanged){
    for when the person only wants THIS page's (filtered) data, not the full
    multi-sheet Analytics Report. ---- */
 function exportRowsToExcel(rows, filename, sheetName, opts){
-  if(takePdfMode()) return exportSectionsToPdf([{name:sheetName||'', rows:rows||[], photos: !!(opts && opts.photos)}], pdfName(filename), sheetName || titleFromFilename(filename));
+  if(takePdfMode()) return exportSectionsToPdf([{name:sheetName||'', rows:(opts && opts.pdfRows) || rows || [], photos: !!(opts && opts.photos)}], pdfName(filename), sheetName || titleFromFilename(filename));
   if(typeof XLSX === 'undefined'){ alert('The export library has not fully loaded yet. Please try again in a few seconds.'); return; }
   if(!rows || !rows.length){ alert('Nothing to export — no rows match the current filters.'); return; }
   const wb = XLSX.utils.book_new();
@@ -4512,7 +4528,7 @@ function exportRowsToExcel(rows, filename, sheetName, opts){
 function exportSheetsToExcel(sheets, filename){
   // sheets: [{name, rows}, ...] — multi-sheet export for pages with more
   // than one logical table (e.g. Rejected Requests + Rejected Transfers).
-  if(takePdfMode()) return exportSectionsToPdf(sheets, pdfName(filename), titleFromFilename(filename));
+  if(takePdfMode()) return exportSectionsToPdf(sheets.map(s=>s.pdfRows ? Object.assign({}, s, {rows:s.pdfRows}) : s), pdfName(filename), titleFromFilename(filename));
   if(typeof XLSX === 'undefined'){ alert('The export library has not fully loaded yet. Please try again in a few seconds.'); return; }
   const nonEmpty = sheets.filter(s=>s.rows && s.rows.length);
   if(!nonEmpty.length){ alert('Nothing to export — no rows match the current filters.'); return; }
@@ -6036,7 +6052,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.12-v23';
+const APP_VERSION = '2026.10.12-v24';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
