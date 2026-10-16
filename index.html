@@ -221,6 +221,21 @@ body.mobile-app .kcol-scroll{max-height:calc(var(--vh) * 72);}
 .kanban-col-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 2px;}
 .kanban-col-head h4{font-size:12.5px;}
 .kanban-count{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;color:var(--ink-soft);}
+/* Phone: one status at a time, picked from a sticky tab bar (no scroll box inside a scroll box) */
+.req-mtabs{display:none;}
+@media(max-width:980px){
+  .req-mtabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:sticky;top:var(--req-tabs-top,61px);z-index:15;background:var(--bg);padding:8px 0 10px;margin:-4px 0 6px;}
+  .req-mtabs button{border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);border-radius:12px;padding:7px 2px 6px;font:inherit;font-size:11px;font-weight:600;line-height:1.2;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;min-width:0;}
+  .req-mtabs button b{font-size:17px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .req-mtabs button.on{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:var(--shadow);}
+  .req-mtabs button.on b{color:#fff;}
+  .kanban.m-tabs .kanban-col{display:none;}
+  .kanban.m-tabs .kanban-col.m-on{display:block;}
+  .kanban.m-tabs .kanban-col-head{display:none;}
+  .kanban.m-tabs .kcol-scroll, body.mobile-app .kanban.m-tabs .kcol-scroll{max-height:none;overflow:visible;margin-right:0;padding-right:0;}
+  .req-swipe-hint{display:block;text-align:center;font-size:11px;color:var(--ink-faint);margin:10px 0 2px;}
+}
+.req-swipe-hint{display:none;}
 .kcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow);}
 .kcard-top{display:flex;justify-content:space-between;gap:6px;} .kcard-code{font-weight:700;font-size:12.5px;}
 .kcard-desc{font-size:11.5px;color:var(--ink-soft);margin-top:3px;}
@@ -3623,6 +3638,33 @@ function reqExportRow(r){
     'Proof of Deployment':proofStatusLabel(r), 'Proof Uploaded By':(proofOf(r)||{}).uploadedBy||'', 'Proof Uploaded At':fmtDT((proofOf(r)||{}).uploadedAt), 'Proof Warnings':String((proofOf(r)||{}).flags||'').split(',').filter(Boolean).map(pkFlagLabel).join('; ')};
 }
 let reqView = 'board';
+let reqMobileTab = (()=>{ try{ return sessionStorage.getItem('vs_req_mtab') || 'for_sorting'; }catch(e){ return 'for_sorting'; } })();
+function setReqMobileTab(key, keepPlace){
+  reqMobileTab = key; try{ sessionStorage.setItem('vs_req_mtab', key); }catch(e){}
+  document.querySelectorAll('.req-mtabs [data-mtab]').forEach(b=>{ const on = b.dataset.mtab===key; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  document.querySelectorAll('.kanban.m-tabs .kanban-col').forEach(c=>c.classList.toggle('m-on', c.dataset.col===key));
+  const tabs = document.querySelector('.req-mtabs');
+  if(tabs && !keepPlace && getComputedStyle(tabs).display!=='none'){
+    const top = tabs.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(tabs).top)||0);
+    if(window.scrollY > top) window.scrollTo({top, behavior:'smooth'});
+  }
+}
+function wireReqMobileTabs(keys){
+  const tabs = document.querySelector('.req-mtabs'), board = document.querySelector('.kanban.m-tabs');
+  if(!tabs || !board) return;
+  const bar = document.querySelector('.topbar');
+  if(bar) tabs.style.setProperty('--req-tabs-top', Math.round(bar.getBoundingClientRect().height)+'px');
+  tabs.querySelectorAll('[data-mtab]').forEach(b=>b.addEventListener('click', ()=>setReqMobileTab(b.dataset.mtab)));
+  let sx=0, sy=0, tracking=false;
+  board.addEventListener('touchstart', e=>{ const t=e.touches[0]; sx=t.clientX; sy=t.clientY; tracking = !e.target.closest('input,select,textarea,.table-wrap'); }, {passive:true});
+  board.addEventListener('touchend', e=>{
+    if(!tracking) return; tracking=false;
+    const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy)*1.6) return;   // mostly-horizontal swipes only
+    const i = keys.indexOf(reqMobileTab), j = i + (dx<0 ? 1 : -1);
+    if(j>=0 && j<keys.length) setReqMobileTab(keys[j]);
+  }, {passive:true});
+}
 function renderRequests(){
   const whFilter = currentFilterWarehouse();
   const reqs = DATA.requests.filter(r=> (whFilter==='all'||r.warehouseId===whFilter) && matchesBUFilter(r.posmCode));
@@ -3659,17 +3701,23 @@ function renderRequests(){
 
   if(reqView==='board'){
     document.getElementById('btnNewReq').addEventListener('click', openNewRequestModal);
+    const colItems = {};
+    cols.forEach(c=>{ colItems[c.key] = reqs.filter(r=> c.key==='deployed' ? isDeployed(r) : c.key==='delivered' ? (r.status==='delivered' && !isDeployed(r)) : r.status===c.key).length; });
+    if(!cols.some(c=>c.key===reqMobileTab)) reqMobileTab = 'for_sorting';
     document.getElementById('reqViewRoot').innerHTML = `
-      <div class="kanban">
+      <div class="req-mtabs" role="tablist" aria-label="Request status">${cols.map(c=>`<button type="button" role="tab" data-mtab="${c.key}" class="${c.key===reqMobileTab?'on':''}" aria-selected="${c.key===reqMobileTab}"><b>${colItems[c.key]}</b>${c.label}</button>`).join('')}</div>
+      <div class="kanban m-tabs">
         ${cols.map(c=>{
           const items = reqs.filter(r=> c.key==='deployed' ? isDeployed(r) : c.key==='delivered' ? (r.status==='delivered' && !isDeployed(r)) : r.status===c.key)
             .sort((a,b)=> c.key==='deployed' ? String((proofOf(b)||{}).uploadedAt).localeCompare(String((proofOf(a)||{}).uploadedAt))
               : c.key==='delivered' ? String(b.dateDelivered||'').localeCompare(String(a.dateDelivered||'')) : (c.key==='for_sorting' ? reqArrivalCmp(a,b) : new Date(b.dateCreated)-new Date(a.dateCreated)));
-          return `<div class="kanban-col"><div class="kanban-col-head"><h4><span class="badge ${c.cls}">${c.label}</span></h4><span class="kanban-count">${items.length}</span></div>
+          return `<div class="kanban-col${c.key===reqMobileTab?' m-on':''}" data-col="${c.key}"><div class="kanban-col-head"><h4><span class="badge ${c.cls}">${c.label}</span></h4><span class="kanban-count">${items.length}</span></div>
             <div class="kcol-scroll${c.key==='for_sorting'?' kcol-sorting':''}">${(c.key==='for_sorting' ? sortingByTsHtml(items) : items.slice(0,25).map(reqCardHtml).join('')) || `<div class="empty-state">No requests here.</div>`}</div>
           </div>`;
         }).join('')}
-      </div>`;
+      </div>
+      <div class="req-swipe-hint">Swipe left or right to change status</div>`;
+    wireReqMobileTabs(cols.map(c=>c.key));
     document.querySelectorAll('[data-advance]').forEach(b=>b.addEventListener('click',()=>advanceRequest(b.dataset.advance)));
     loadImagesFor(reqs.filter(r=>r.status==='for_sorting').slice(0,60).map(r=>r.posmCode));
     document.querySelectorAll('[data-proof-up]').forEach(b=>b.addEventListener('click',()=>openProofUploadModal(b.dataset.proofUp)));
@@ -6093,7 +6141,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.12-v26';
+const APP_VERSION = '2026.10.16-v27';
 function updateVersionInfo(){
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
