@@ -2114,6 +2114,24 @@ function pkReadExif(buf){
   }catch(e){}
   return out;
 }
+// Real-time photos only: the photo must have been taken just now with the camera (no old / gallery photos).
+var PK_LIVE_MIN = 10;
+var PK_MAX_PHOTOS = Infinity; // no limit on proof photos per upload
+function pkCheckLive(info){
+  const now = Date.now(), lim = PK_LIVE_MIN*60000, lm = Number(info.lastModified)||0;
+  let t = 0; if(info.takenAt){ const d = new Date(String(info.takenAt)); if(!isNaN(d)) t = d.getTime(); }
+  if((lm && now - lm > lim) || (t && now - t > lim))
+    throw new Error('Real-time photo only — this photo was not taken just now. Please tap "Take photo" and take a new picture at the store.');
+}
+// Keep each photo small in memory (max 1400px) so TS can take many photos without the phone running out of memory.
+async function pkShrink(bmp){
+  const W = bmp.width||bmp.naturalWidth, H = bmp.height||bmp.naturalHeight, s = Math.min(1, 1400/Math.max(W,H));
+  if(s >= 1) return bmp;
+  const c = document.createElement('canvas'); c.width = Math.round(W*s); c.height = Math.round(H*s);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  try{ if(bmp.close) bmp.close(); }catch(e){}
+  return c;
+}
 async function pkLoadBitmap(file){
   if(window.createImageBitmap){ try{ return await createImageBitmap(file, {imageOrientation:'from-image'}); }catch(e){} }
   return await new Promise((res, rej)=>{ const url = URL.createObjectURL(file); const im = new Image(); im.onload = ()=>{ res(im); }; im.onerror = ()=>rej(new Error('This file is not a photo the browser can open.')); im.src = url; });
@@ -2139,7 +2157,7 @@ async function pkInspect(file){
   const buf = await file.arrayBuffer();
   const hash = await pkSha256(buf);
   const exif = pkReadExif(buf);
-  const bmp = await pkLoadBitmap(file);
+  const bmp = await pkShrink(await pkLoadBitmap(file));
   const ahash = pkDHash(bmp);
   const c = document.createElement('canvas'); const s = Math.min(1, 240 / Math.max(bmp.width, bmp.height));
   c.width = Math.round(bmp.width*s); c.height = Math.round(bmp.height*s); c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
@@ -2210,7 +2228,8 @@ function proofIndex(){
 }
 function proofOf(r){ return r ? (proofIndex()[r.id] || null) : null; }
 function proofStartDate(){ return (DATA_ALL && DATA_ALL.proofStartDate) || '9999-12-31'; }
-function proofGrace(){ return (DATA_ALL && Number(DATA_ALL.proofGraceDays)) || 3; }
+var PROOF_DUE_DAYS = 10; // proof of deployment photo is due 10 days after Delivered
+function proofGrace(){ return PROOF_DUE_DAYS; }
 function isDeployed(r){ const p = proofOf(r); return !!(r && r.status==='delivered' && p && (p.status==='for_review' || p.status==='verified')); }
 function daysSinceDate(d){ return Math.max(0, Math.round((new Date(todayStr()) - new Date(String(d).slice(0,10)))/86400000)); }
 // Delivered more than the grace days ago, and still no accepted proof.
@@ -2238,7 +2257,8 @@ function proofChipHtml(r){
   if(p && p.status==='rejected') return `<span class="badge expired">Proof rejected — upload again</span>`;
   if(!r.dateDelivered || String(r.dateDelivered) < proofStartDate()) return `<span class="cell-sub">No proof (delivered before proof tracking)</span>`;
   const d = daysSinceDate(r.dateDelivered);
-  return `<span class="badge ${d>proofGrace()?'expired':'obsolete'}">${icon('camera',11)} No proof yet · ${d===0?'today':d+' day'+(d!==1?'s':'')}</span>`;
+  const left = proofGrace() - d;
+  return `<span class="badge ${d>proofGrace()?'expired':'obsolete'}">${icon('camera',11)} No proof yet · ${left<0 ? (-left)+' day'+(left!==-1?'s':'')+' overdue' : (left===0 ? 'due today' : 'due in '+left+' day'+(left!==1?'s':''))}</span>`;
 }
 function fmtDT(v){ if(!v) return ''; const d = new Date(v); if(isNaN(d) || !/T\d{2}:\d{2}.*Z$/.test(String(v))) return String(v).replace('T',' ').slice(0,16); return pkFmtStamp(d); }
 function proofStatusLabel(r){
@@ -2254,7 +2274,7 @@ function openProofUploadModal(reqId){
     .sort((a,b)=>(a.id===reqId?-1:b.id===reqId?1:String(b.dateDelivered).localeCompare(String(a.dateDelivered))));
   const st = {pick:{[reqId]:true}, infos:[], gps:null, gpsState:'loading', busy:false};
   openModal(`${icon('camera',16)} Proof of Deployment`, `
-    <p class="login-note" style="margin-top:0;">Upload 1–3 photos of the POSM <b>installed at the store</b>. The request #, store, date/time and GPS are printed on each photo. A photo already used for another request is refused.</p>
+    <p class="login-note" style="margin-top:0;">Take as many photos as needed of the POSM <b>installed at the store</b>. The request #, store, date/time and GPS are printed on each photo. A photo already used for another request is refused.</p>
     <div class="field"><label>Store</label><div style="font-weight:700;">${escHtml(r0.store)}</div></div>
     <div class="field"><label>Requests this proof covers</label><div id="puItems" class="table-wrap scroll-y" style="max-height:170px;"></div></div>
     <div class="field"><label>Photos</label><div id="puShots"></div></div>
@@ -2275,9 +2295,9 @@ function openProofUploadModal(reqId){
   }
   function draw(){
     const flags = st.infos.length ? pkFlags(st.infos, st.gps, earliest()).filter(f=>f!=='no_gps') : [];
-    document.getElementById('puShots').innerHTML = `<div class="proof-shots">${[0,1,2].map(i=>{ const p = st.infos[i];
+    document.getElementById('puShots').innerHTML = `<div class="proof-shots">${Array.from({length: Math.min(PK_MAX_PHOTOS, st.infos.length+1)}, (_,i)=>i).map(i=>{ const p = st.infos[i];
         return p ? `<div class="proof-shot"><img src="${p.thumb}" alt=""><button class="x" data-rm="${i}" type="button">×</button><span class="tag">Camera</span></div>` : `<div class="proof-shot">Photo ${i+1}</div>`; }).join('')}</div>
-      ${st.infos.length<3 ? `<div style="display:flex;gap:8px;margin-top:8px;">
+      ${st.infos.length<PK_MAX_PHOTOS ? `<div class="cell-sub" style="margin-top:6px;">${st.infos.length} photo${st.infos.length!==1?'s':''} taken</div><div style="display:flex;gap:8px;margin-top:8px;">
         <label class="btn primary sm" style="cursor:pointer;">${icon('camera',13)} Take photo<input type="file" accept="image/*" capture="environment" id="puCam" style="display:none;"></label></div>` : ''}
       ${flags.map(f=>`<div class="proof-flag">${icon('alert',13)}<div>${escHtml(pkFlagLabel(f))}</div></div>`).join('')}<div id="puErr"></div>`;
     document.getElementById('puGps').innerHTML = st.gpsState==='loading' ? 'Getting location...' : st.gpsState==='ok'
@@ -2292,7 +2312,7 @@ function openProofUploadModal(reqId){
   }
   async function add(file, gallery){
     if(!file) return;
-    try{ const info = await pkInspect(file); info.gallery = gallery;
+    try{ const info = await pkInspect(file); info.gallery = gallery; pkCheckLive(info);
       if(st.infos.some(x=>x.hash===info.hash)) throw new Error('You already added this same photo.');
       st.infos.push(info); draw();
     }catch(e){ draw(); const el = document.getElementById('puErr'); if(el) el.innerHTML = `<div class="proof-flag" style="background:var(--danger-bg);color:var(--danger);">${escHtml(e.message||'Could not read the photo.')}</div>`; }
