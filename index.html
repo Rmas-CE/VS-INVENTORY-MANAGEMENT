@@ -49,11 +49,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-/* Backup source: if cdnjs is blocked or slow, load the same libraries from jsDelivr */
+/* Backup source: if cdnjs is blocked or slow, load Chart.js from jsDelivr.
+   The Excel library (SheetJS) is no longer loaded here — it is fetched in the background
+   after the app opens, and on demand the first time someone exports. */
 if(!window.Chart) document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"><\/script>');
-if(!window.XLSX) document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');
 </script>
 <style>
 :root{--vh:1vh;
@@ -652,7 +652,7 @@ body.mobile-app .login-screen{min-height:calc(var(--vh) * 100)}
       <button class="btn primary" id="loginAdminBtn" style="width:100%;justify-content:center;">Log in as Admin</button>
     </div>
     <div id="loginError" class="login-error" style="display:none;"></div>
-    <div class="cell-sub" style="text-align:center;margin-top:14px;">App version 3</div>
+    <div class="cell-sub" id="loginVersion" style="text-align:center;margin-top:14px;"></div>
     <a class="vs-back" href="https://rmas-ce.github.io/CE-VAULT-SYNC/">← Back to VaultSync</a>
     <div class="install-banner" id="installBanner"><img src="icon-192.png" alt=""><div class="ib-text"><b>Install the app</b>Add it to your home screen so it works like a real app.</div><button id="installBannerBtn">Install</button></div>
   </div>
@@ -731,12 +731,8 @@ body.mobile-app .login-screen{min-height:calc(var(--vh) * 100)}
 <datalist id="storeDatalist"></datalist>
 <datalist id="tsDatalist"></datalist>
 
-<script src="posm-data-1.js"></script>
-<script src="posm-data-2.js"></script>
-<script src="posm-data-3.js"></script>
-<script src="posm-data-4.js"></script>
-<script src="posm-data-5.js"></script>
-<script src="posm-data-6.js"></script>
+<!-- posm-data-1..6.js (the 2.4 MB starting POSM list with pictures) are only needed to seed a
+     brand-new Google Sheet or to "Replace POSM list", so they are loaded on demand (loadSeedItems). -->
 <script src="posm-org.js"></script>
 <script>
 /* ============================= ICONS ============================= */
@@ -795,9 +791,30 @@ function fillStaticIcons(root){
 }
 function icon(name,size=17){return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor">${ICONS[name]||''}</svg>`;}
 
-/* ============================= REAL SEED DATA ============================= */
-const REAL_ITEMS = [].concat(...(window.POSM_DATA_PARTS||[]));
-if(!REAL_ITEMS.length) alert('Missing posm-data files. Make sure all posm-data-*.js files are uploaded in the same folder as this HTML.');
+/* ============================= REAL SEED DATA =============================
+   The baked-in POSM list (posm-data-1..6.js) is loaded only when it is actually needed:
+   seeding an empty Google Sheet, Reset test data, or Replace POSM list. */
+const POSM_DATA_FILES = 6;
+let REAL_ITEMS = null, seedItemsPromise = null;
+function loadSeedItems(){
+  if(REAL_ITEMS) return Promise.resolve(REAL_ITEMS);
+  if(seedItemsPromise) return seedItemsPromise;
+  window.POSM_DATA_PARTS = [];
+  seedItemsPromise = Promise.all(Array.from({length: POSM_DATA_FILES}, (_, i)=>new Promise((res, rej)=>{
+    const s = document.createElement('script');
+    s.src = 'posm-data-' + (i+1) + '.js'; s.async = false;   // keep file order
+    s.onload = res; s.onerror = ()=>rej(new Error('posm-data-' + (i+1) + '.js'));
+    document.head.appendChild(s);
+  }))).then(()=>{
+    const items = [].concat(...(window.POSM_DATA_PARTS||[]));
+    if(!items.length) throw new Error('empty');
+    REAL_ITEMS = items; return items;
+  }).catch(e=>{
+    seedItemsPromise = null;
+    throw new Error('Missing posm-data files ('+(e.message||e)+'). Make sure all posm-data-*.js files are uploaded in the same folder as this HTML.');
+  });
+  return seedItemsPromise;
+}
 const ORG_META = window.POSM_ORG_META || {};
 
 const BU_LABELS = {AV:'AV', HA:'HA', AC:'AC'};
@@ -811,7 +828,7 @@ function buColor(bu){
   return BU_PALETTE[idx % BU_PALETTE.length];
 }
 const BU_ORDER = Object.keys(BU_LABELS);
-const BUS = [...new Set(REAL_ITEMS.map(i=>i.bu))].sort((a,b)=>{ const x=BU_ORDER.indexOf(a), y=BU_ORDER.indexOf(b); return (x<0?99:x)-(y<0?99:y); });
+const BUS = BU_ORDER.slice(); // AV, HA, AC — extra BUs found in the live data are added where needed
 
 const ALL_WAREHOUSES = Object.keys(ORG_META.warehouseRegion).map(name=>({id:name, dbId:slugId(name), name:name, region:ORG_META.warehouseRegion[name]}));
 // WAREHOUSES = what the logged-in account can work with. Admin: all of them.
@@ -1016,7 +1033,7 @@ function setSyncStatus(state, done, total){
     cached: ['var(--warning)', 'Showing saved data • updating...'],
     error: ['var(--danger)', 'Backend unavailable'],
   };
-  const [color,text] = map[state] || map.local;
+  const [color,text] = map[state] || map.connecting;
   dot.style.background = color;
   label.textContent = text;
 }
@@ -1222,7 +1239,7 @@ function wireLoginScreen(){
     const btn = document.getElementById('loginAdminBtn');
     const password = document.getElementById('loginAdminPassword').value;
     if(!password){ loginError('Enter the admin password.'); return; }
-    btn.disabled = true; btn.textContent = 'Sinusuri...';
+    btn.disabled = true; btn.textContent = 'Checking...';
     try{
       await postAction('login', {password});
       session = {role:'admin', name:'Admin', password};
@@ -1522,13 +1539,16 @@ async function connectBackend(){
       // seeded before Trade Supervisor/Store support existed, orgSeeded will
       // still be false — this same call backfills just that part, since the
       // backend tracks the two seeding steps on separate flags.
-      setSyncStatus('seeding', 0, REAL_ITEMS.length);
-      await postAction('seed', {posmItems: REAL_ITEMS, warehouses: ALL_WAREHOUSES, tsList: ORG_META.tsList, storeList: ORG_META.storeList});
+      const seedItems = await loadSeedItems();
+      setSyncStatus('seeding', 0, seedItems.length);
+      await postAction('seed', {posmItems: seedItems, warehouses: ALL_WAREHOUSES, tsList: ORG_META.tsList, storeList: ORG_META.storeList});
     }
     await loadFromServer(true);
     setSyncStatus('live');
     startAutoRefresh();
     renderAll();
+    // Warm up the Excel library in the background so the first export is instant.
+    setTimeout(()=>loadLib('xlsx').catch(()=>{}), 5000);
   }catch(e){
     console.warn('Could not reach the Google Sheet — retrying in 15s', e);
     setSyncStatus('error');
@@ -1546,7 +1566,17 @@ async function connectBackend(){
    refetch" for actions it doesn't recognize (safety net, never silently
    stale). The 45s auto-refresh still runs in the background to pick up
    other devices' changes. ---- */
+// With a Region / BU filter on, DATA is a filtered copy of DATA_ALL. Changes are applied to the
+// full copy and the filtered view is rebuilt, so they are not lost when a filter is switched.
 function applyLocalUpdate(action, payload, result){
+  if(!DATA_ALL || DATA === DATA_ALL) return applyLocalUpdateTo(action, payload, result);
+  const view = DATA; DATA = DATA_ALL;
+  let ok = false;
+  try{ ok = applyLocalUpdateTo(action, payload, result); } finally { DATA = view; }
+  if(ok){ DATA = scopeData(DATA_ALL); syncOrgListsFromData(); }
+  return ok;
+}
+function applyLocalUpdateTo(action, payload, result){
   switch(action){
     case 'stockIn': {
       if(payload.isNew){
@@ -1697,8 +1727,8 @@ async function performAction(targetAction, payload, opts){
   } else {
     const subResult = await postAction('submitPending', {targetAction, payload: withAttribution, submittedBy: session.name, region: session.region, regionPassword: session.password});
     if(!opts.silent){
-      DATA.pendingActions = DATA.pendingActions || [];
-      DATA.pendingActions.unshift({id: subResult.id, action: targetAction, payload: JSON.stringify(withAttribution), submittedBy: session.name, submittedAt: new Date().toISOString(), status:'pending', reviewedBy:'', reviewedAt:'', rejectReason:''});
+      const item = {id: subResult.id, action: targetAction, payload: JSON.stringify(withAttribution), submittedBy: session.name, submittedAt: new Date().toISOString(), status:'pending', reviewedBy:'', reviewedAt:'', rejectReason:''};
+      [DATA, DATA_ALL].forEach((d, i)=>{ if(d && (i===0 || d!==DATA)){ d.pendingActions = d.pendingActions || []; d.pendingActions.unshift(item); } });
       renderAll();
     }
     return {applied:false};
@@ -1809,9 +1839,9 @@ function renderActivityFeed(){
   const more = document.getElementById('actShowMore');
   if(more) more.addEventListener('click', ()=>{ window.__actShow = CAP + 25; renderActivityFeed(); });
 }
-function getOverdueRequests(){
-  return DATA.requests.filter(r=> r.status==='for_delivery' && r.dueDate && new Date(r.dueDate) < new Date());
-}
+// Overdue = the due date has passed (a request due today is not late yet). Same rule as the Alerts panel.
+function isOverdue(r){ return !!(r && r.status==='for_delivery' && r.dueDate && String(r.dueDate).slice(0,10) < todayStr()); }
+function getOverdueRequests(){ return DATA.requests.filter(isOverdue); }
 // Fast lookups: an index of the inventory rows, rebuilt only when the inventory list changes
 // (instead of scanning all ~6,000 rows for every POSM on every screen).
 let _invIdxSrc = null, _invIdxLen = -1, _invByKey = new Map(), _invByCode = new Map();
@@ -1937,7 +1967,7 @@ function renderNotifPanel(){
       <div class="notif-section-title">Overdue Deliveries (${overdue.length})</div>
       ${overdue.length ? overdue.slice(0,8).map(r=>{
         const p = posmByCode(r.posmCode);
-        const daysOver = Math.floor((new Date() - new Date(r.dueDate)) / 86400000);
+        const daysOver = daysSinceDate(r.dueDate);
         return `<div class="notif-item" data-goto="requests"><div class="t1">${r.posmCode} — ${r.store}</div><div class="t2">${p?p.desc:''} · ${daysOver} day${daysOver!==1?'s':''} overdue</div></div>`;
       }).join('') : `<div class="notif-empty">No overdue deliveries right now.</div>`}
     </div>
@@ -2149,7 +2179,7 @@ async function pkShrink(bmp){
 }
 async function pkLoadBitmap(file){
   if(window.createImageBitmap){ try{ return await createImageBitmap(file, {imageOrientation:'from-image'}); }catch(e){} }
-  return await new Promise((res, rej)=>{ const url = URL.createObjectURL(file); const im = new Image(); im.onload = ()=>{ res(im); }; im.onerror = ()=>rej(new Error('This file is not a photo the browser can open.')); im.src = url; });
+  return await new Promise((res, rej)=>{ const url = URL.createObjectURL(file); const im = new Image(); im.onload = ()=>{ URL.revokeObjectURL(url); res(im); }; im.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error('This file is not a photo the browser can open.')); }; im.src = url; });
 }
 // 64-bit difference hash, survives re-saving / resizing of the same picture.
 function pkDHash(bmp){
@@ -3397,7 +3427,7 @@ function renderInventoryCore(allMode){
               <div class="inv-card-desc" title="${p.desc}">${p.desc}</div>${modelHtml(p)}
               <div class="inv-card-meta"><span class="cell-sub">${p.type}</span><span class="cell-sub">${buLabel(p.bu)}</span></div>
               <div class="inv-card-qty">
-                <div><div class="cell-sub">${whFilter==='all'?'Total Qty':'Qty — '+whById(whFilter).name}</div><div class="qty-strong">${qty.toLocaleString()}</div></div>
+                <div><div class="cell-sub">${whFilter==='all'?'Total Qty':'Qty — '+escHtml((whById(whFilter)||{}).name||whFilter)}</div><div class="qty-strong">${qty.toLocaleString()}</div></div>
                 <div style="text-align:right;"><div class="cell-sub">Beginning</div><div class="cell-sub" style="font-weight:600;">${beg.toLocaleString()}</div></div>
               </div>
               ${allMode ? otherWhBreakdown(p.code) : ''}
@@ -3468,7 +3498,7 @@ function renderInventoryCore(allMode){
   });
   charts.chartInvByBu = safeChart(document.getElementById('chartInvByBu'), {
     type:'doughnut',
-    data:{ labels: BUS.map(buLabel), datasets:[{ data: BUS.map(bu=> rows.filter(p=>p.bu===bu).reduce((s,p)=>s+totalQtyForPosm(p.code,'all'),0)), backgroundColor: BUS.map(buColor), borderWidth:0 }]},
+    data:{ labels: BUS.map(buLabel), datasets:[{ data: BUS.map(bu=> rows.filter(p=>p.bu===bu).reduce((s,p)=>s+totalQtyForPosm(p.code,whFilter),0)), backgroundColor: BUS.map(buColor), borderWidth:0 }]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:c.ink, boxWidth:10, padding:14, font:{size:11.5}}}} }
   });
 }
@@ -3566,19 +3596,21 @@ function renderStockflow(){
 /* ============================= RENDER: REQUESTS & TRANSFERS ============================= */
 /* ---- Requests board helpers ---- */
 // First come, first served: older request date first; same day -> the order it reached the Sheet.
+let _arrIdx = new Map(), _arrSrc = null, _arrLen = -1;
 function reqArrivalCmp(a, b){
   const d = String(a.dateCreated||'').localeCompare(String(b.dateCreated||''));
   if(d) return d;
   const list = (DATA_ALL && DATA_ALL.requests) || DATA.requests;
-  const ia = list.indexOf(a), ib = list.indexOf(b);   // just added on this device = newest
-  return (ia<0 ? Infinity : ia) - (ib<0 ? Infinity : ib) || 0;
+  if(list !== _arrSrc || list.length !== _arrLen){ _arrIdx = new Map(); list.forEach((r,i)=>_arrIdx.set(r.id, i)); _arrSrc = list; _arrLen = list.length; }
+  const ia = _arrIdx.has(a.id) ? _arrIdx.get(a.id) : Infinity, ib = _arrIdx.has(b.id) ? _arrIdx.get(b.id) : Infinity;   // just added on this device = newest
+  return (ia===ib) ? 0 : (ia < ib ? -1 : 1);
 }
 // Store Opening / Reopening requests get an amber mark so RMAS can spot them (longer preparation).
 function isOpeningReq(r){ return /store\s*(opening|reopening)/i.test(String(r && r.purpose || '')); }
 const OPENING_BADGE = `<span class="badge opening" title="Store Opening / Reopening request">🏬 Store Opening</span>`;
 function reqCardHtml(r){
   const p = posmByCode(r.posmCode);
-  const isLate = r.status==='for_delivery' && r.dueDate && new Date(r.dueDate) < new Date();
+  const isLate = isOverdue(r);
   const deliveredLate = r.status==='delivered' && r.dateDelivered && r.dueDate && new Date(r.dateDelivered) > new Date(r.dueDate);
   const opening = isOpeningReq(r);
   return `<div class="kcard${opening?' opening':''}"><div class="kcard-top"><span class="kcard-code">${r.posmCode}</span><span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">${opening?OPENING_BADGE:''}${isLate?'<span class="badge late">Overdue</span>':(deliveredLate?'<span class="badge late">Late</span>':'')}</span></div>
@@ -3733,7 +3765,7 @@ function renderRequests(){
           const stCls = t.status==='pending'?'pending':t.status==='in_transit'?'intransit':'completed';
           const stLabel = t.status==='pending'?'Pending':t.status==='in_transit'?'In Transit':'Completed';
           return `<tr><td><div class="cell-main">${t.posmCode}</div><div class="cell-sub">${p?p.desc:''}</div></td>
-            <td>${whById(t.fromWarehouseId).name}</td><td>${whById(t.toWarehouseId).name}</td><td class="qty-strong">${t.qty}</td>
+            <td>${escHtml((whById(t.fromWarehouseId)||{}).name||t.fromWarehouseId)}</td><td>${escHtml((whById(t.toWarehouseId)||{}).name||t.toWarehouseId)}</td><td class="qty-strong">${t.qty}</td>
             <td><span class="badge ${stCls}">${stLabel}</span></td><td class="cell-sub">${fmtDate(t.dateCreated)}</td>
             <td>${t.status!=='completed' ? `<button class="btn sm primary" data-trf-advance="${t.id}">${t.status==='pending'?'Mark In Transit':'Mark Completed'}</button>` : `<span class="cell-sub">Done ${fmtDateShort(t.dateCompleted)}</span>`}</td></tr>`;
         }).join('') || `<tr><td colspan="7" class="empty-state">No transfer records yet.</td></tr>`}
@@ -3924,7 +3956,7 @@ function renderMetrics(){
         <tbody>
         ${currentlyOverdue.sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(r=>{
           const p = posmByCode(r.posmCode);
-          const daysOver = Math.floor((new Date() - new Date(r.dueDate)) / 86400000);
+          const daysOver = daysSinceDate(r.dueDate);
           return `<tr><td><div class="cell-main">${r.posmCode}</div><div class="cell-sub">${p?p.desc:''}</div></td><td>${r.store}</td><td>${r.ts}</td>
             <td>${whById(r.warehouseId)?whById(r.warehouseId).name:r.warehouseId}</td><td class="cell-sub">${fmtDate(r.dueDate)}</td>
             <td><span class="badge late">${daysOver} day${daysOver!==1?'s':''}</span></td></tr>`;
@@ -4082,6 +4114,12 @@ function renderBeginning(){
     const io = inOutTotals(t=>t.warehouseId===w.id && matchesBUFilter(t.posmCode), true);
     return {w, beg, cur, sIn:io.sIn, sOut:io.sOut, variance:cur-beg};
   });
+  // Stock In / Out per POSM (all warehouses, transfers left out) — one pass instead of one scan per POSM.
+  const ioCode = new Map();
+  const addIo = (c, i, o)=>{ const e = ioCode.get(c) || {sIn:0, sOut:0}; e.sIn += i; e.sOut += o; ioCode.set(c, e); };
+  if(hasIo()) DATA.ioSummary.forEach(r=>addIo(r.c, r.in, r.out));
+  else (DATA.transactions||[]).forEach(t=>{ const q = Number(t.qty)||0; if(t.type==='in') addIo(t.posmCode, q, 0); else if(t.type==='out') addIo(t.posmCode, 0, q); });
+  const ioOf = code=> ioCode.get(code) || {sIn:0, sOut:0};
   const ioCell = (n, sign)=> n ? `<span style="color:${sign==='+'?'var(--success)':'var(--danger)'};font-weight:600;">${sign}${n.toLocaleString()}</span>` : '<span style="color:var(--ink-faint);">0</span>';
   const html = `
     <details class="howto"><summary>${icon('info',15)} How Beginning Stock works<span class="howto-chev">${icon('chevron',14)}</span></summary><div class="notice">${icon('alert',16)}<div>The <b>Beginning Stock</b> here is each POSM's current stock count from when the real data was first loaded into this tool. As you use Stock In/Out, Requests, and Transfers, this shows the variance from that baseline.</div></div></details>
@@ -4105,7 +4143,7 @@ function renderBeginning(){
       <div class="table-wrap scroll-y" style="max-height:560px;"><table><thead><tr><th>POSM</th><th>Business Unit</th><th>Beginning Stock</th><th>Stock In</th><th>Stock Out</th><th>Current Stock</th><th>Variance</th></tr></thead><tbody>
         ${begPosmList.map(p=>{
           const beg = totalBeginningForPosm(p.code,'all'); const cur = totalQtyForPosm(p.code,'all'); const v = cur-beg;
-          const io = inOutTotals(t=>t.posmCode===p.code, false);
+          const io = ioOf(p.code);
           return `<tr><td><div class="row-flex">${tile(p,30)}<div><div class="cell-main">${p.code}</div><div class="cell-sub">${p.desc}</div>${modelHtml(p)}</div></div></td>
             <td>${buLabel(p.bu)}</td><td>${beg.toLocaleString()}</td><td>${ioCell(io.sIn,'+')}</td><td>${ioCell(io.sOut,'-')}</td><td class="qty-strong">${cur.toLocaleString()}</td>
             <td style="color:${v>=0?'var(--success)':'var(--danger)'};font-weight:700;">${v>=0?'+':''}${v.toLocaleString()}</td></tr>`;
@@ -4118,7 +4156,7 @@ function renderBeginning(){
   document.getElementById('btnExportBeginning').addEventListener('click', ()=>{
     const exportRows = begPosmList.map(p=>{
       const beg = totalBeginningForPosm(p.code,'all'); const cur = totalQtyForPosm(p.code,'all');
-      const io = inOutTotals(t=>t.posmCode===p.code, false);
+      const io = ioOf(p.code);
       return {'POSM Code':p.code, Description:p.desc, Model:p.model||'', 'Business Unit':buLabel(p.bu), 'Beginning Stock':beg, 'Stock In':io.sIn, 'Stock Out':io.sOut, 'Current Stock':cur, Variance:cur-beg};
     });
     exportRowsToExcel(exportRows, 'Beginning-Stock-'+todayStr()+'.xlsx', 'Beginning Stock');
@@ -4604,30 +4642,33 @@ function renderSection(sectionChanged){
    multi-sheet Analytics Report. ---- */
 function exportRowsToExcel(rows, filename, sheetName, opts){
   if(takePdfMode()) return exportSectionsToPdf([{name:sheetName||'', rows:(opts && opts.pdfRows) || rows || [], photos: !!(opts && opts.photos)}], pdfName(filename), sheetName || titleFromFilename(filename));
-  if(typeof XLSX === 'undefined'){ alert('The export library has not fully loaded yet. Please try again in a few seconds.'); return; }
   if(!rows || !rows.length){ alert('Nothing to export — no rows match the current filters.'); return; }
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), (sheetName||'Sheet1').slice(0,31));
-  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  const blob = new Blob([wbout], {type:'application/octet-stream'});
+  exportSheetsToExcel([{name: sheetName||'Sheet1', rows}], filename, true);
+}
+// Saves a file the browser made. The link is released a bit later — releasing it right
+// away can cancel the download on some phones (Safari / older Android).
+function downloadBlob(blob, filename){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(()=>URL.revokeObjectURL(url), 10000);
 }
-function exportSheetsToExcel(sheets, filename){
+function withXlsx(run){
+  if(typeof XLSX !== 'undefined' && XLSX.utils){ run(); return; }
+  showToast('Preparing Excel file…');
+  loadLib('xlsx').then(run).catch(()=>alert('The Excel library could not be loaded. Check the internet connection and try again.'));
+}
+function exportSheetsToExcel(sheets, filename, excelOnly){
   // sheets: [{name, rows}, ...] — multi-sheet export for pages with more
   // than one logical table (e.g. Rejected Requests + Rejected Transfers).
-  if(takePdfMode()) return exportSectionsToPdf(sheets.map(s=>s.pdfRows ? Object.assign({}, s, {rows:s.pdfRows}) : s), pdfName(filename), titleFromFilename(filename));
-  if(typeof XLSX === 'undefined'){ alert('The export library has not fully loaded yet. Please try again in a few seconds.'); return; }
+  if(!excelOnly && takePdfMode()) return exportSectionsToPdf(sheets.map(s=>s.pdfRows ? Object.assign({}, s, {rows:s.pdfRows}) : s), pdfName(filename), titleFromFilename(filename));
   const nonEmpty = sheets.filter(s=>s.rows && s.rows.length);
   if(!nonEmpty.length){ alert('Nothing to export — no rows match the current filters.'); return; }
-  const wb = XLSX.utils.book_new();
-  nonEmpty.forEach(s=> XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s.rows), s.name.slice(0,31)));
-  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  const blob = new Blob([wbout], {type:'application/octet-stream'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
+  withXlsx(()=>{
+    const wb = XLSX.utils.book_new();
+    nonEmpty.forEach(s=> XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s.rows), String(s.name||'Sheet').slice(0,31)));
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    downloadBlob(new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), filename);
+  });
 }
 
 async function exportAnalyticsReport(asPdf){
@@ -4683,7 +4724,7 @@ async function exportAnalyticsReport(asPdf){
       let timeliness;
       if(r.status==='delivered') timeliness = (r.dateDelivered && r.dueDate && new Date(r.dateDelivered)>new Date(r.dueDate)) ? 'Late' : 'On-time';
       else if(r.status==='rejected') timeliness = 'Rejected';
-      else if(r.status==='for_delivery') timeliness = (r.dueDate && new Date(r.dueDate)<new Date()) ? 'Overdue' : 'On Track';
+      else if(r.status==='for_delivery') timeliness = isOverdue(r) ? 'Overdue' : 'On Track';
       else timeliness = 'Not yet in delivery';
       return {'Request ID':r.id, 'POSM Code':r.posmCode, 'Description':(posmByCode(r.posmCode)||{}).desc||'',
         Qty:r.qty, Warehouse:(whById(r.warehouseId)||{}).name||'', Store:r.store, 'Trade Supervisor':r.ts, Purpose:r.purpose||'',
@@ -4998,6 +5039,9 @@ const LIB_SOURCES = {
   leaflet: {test:()=>typeof window.L==='object' && typeof window.L.map==='function', urls:[
     'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
     'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js']},
+  xlsx: {test:()=>typeof window.XLSX==='object' && !!window.XLSX.utils, urls:[
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js']},
   scanner: {test:()=>typeof window.Html5Qrcode==='function', urls:[
     'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js',
     'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js']},
@@ -5014,8 +5058,7 @@ function takePdfMode(){ const m = EXPORT_MODE==='pdf'; EXPORT_MODE = 'excel'; cl
 function pdfName(f){ return String(f||'Report.xlsx').replace(/\.xlsx?$/i,'') + '.pdf'; }
 function titleFromFilename(f){ return String(f||'Report').replace(/\.xlsx?$/i,'').replace(/-?\d{4}-\d{2}-\d{2}$/,'').replace(/-/g,' ').trim() || 'Report'; }
 function pairPdfButtons(){
-  document.querySelectorAll('button').forEach(b=>{
-    if(b.dataset.pdfPaired) return;
+  document.querySelectorAll('button:not([data-pdf-paired])').forEach(b=>{
     if(!/^(⬇\s*)?Excel$/.test(b.textContent.trim())) return;
     b.dataset.pdfPaired = '1';
     b.addEventListener('click', e=>{ if(e.isTrusted) EXPORT_MODE = 'excel'; }, true);
@@ -5120,11 +5163,7 @@ class MiniPDF {
     for(let i=0;i<out.length;i++) bytes[i] = out.charCodeAt(i) & 255;
     return new Blob([bytes], {type:'application/pdf'});
   }
-  save(filename){
-    const url = URL.createObjectURL(this.output());
-    const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 5000);
-  }
+  save(filename){ downloadBlob(this.output(), filename); }
 }
 function pdfScopeLabel(){
   const parts = [];
@@ -5840,8 +5879,10 @@ document.getElementById('exportAnalyticsPdfBtn').addEventListener('click', ()=>e
    Clears every Stock In/Out, Request, Transfer and Pending/Rejected item and puts
    Current Stock back to Beginning Stock. POSM list, Beginning Stock, Warehouses,
    Trade Supervisors and Stores are kept. The backend saves hidden BACKUP tabs first. */
-function openResetTestDataModal(){
+async function openResetTestDataModal(){
   if(!session || session.role!=='admin'){ alert('Only an Admin can reset data.'); return; }
+  let REAL_ITEMS;
+  try{ REAL_ITEMS = await loadSeedItems(); }catch(e){ alert(e.message); return; }
   const baseline = new Set(REAL_ITEMS.map(i=>String(i.code)));
   const testPosm = DATA.posmMaster.filter(p=>!baseline.has(String(p.code)));
   const n = a => (a||[]).length;
@@ -5884,8 +5925,10 @@ function openResetTestDataModal(){
 /* ============================= REPLACE POSM LIST (Admin, Google Sheets mode) =============================
    Swaps the POSM list in the Google Sheet for the one in the posm-data-*.js files
    (the latest inventory Excel). Beginning Stock and Current Stock both become the new count. */
-function openReplacePosmModal(){
+async function openReplacePosmModal(){
   if(!session || session.role!=='admin'){ alert('Only an Admin can replace the POSM list.'); return; }
+  let REAL_ITEMS;
+  try{ REAL_ITEMS = await loadSeedItems(); }catch(e){ alert(e.message); return; }
   const current = (DATA_ALL && DATA_ALL.posmMaster) || DATA.posmMaster || [];
   const curCodes = new Set(current.map(p=>String(p.code)));
   const newCodes = new Set(REAL_ITEMS.map(i=>String(i.code)));
@@ -5936,12 +5979,7 @@ document.getElementById('replacePosmBtn').addEventListener('click', openReplaceP
 document.getElementById('resetDataBtn').addEventListener('click', openResetTestDataModal);
 document.getElementById('exportDataBtn').addEventListener('click', ()=>{
   try{
-    const json = JSON.stringify(DATA,null,2);
-    const filename = 'posm-dashboard-data-'+todayStr()+'.json';
-    const blob = new Blob([json], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'}), 'posm-dashboard-data-'+todayStr()+'.json');
   }catch(e){ alert('Could not export the data.'); }
 });
 document.getElementById('refreshNowBtn').addEventListener('click', async ()=>{
@@ -6141,8 +6179,9 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.16-v27';
+const APP_VERSION = '2026.10.18-v28';
 function updateVersionInfo(){
+  const lv = document.getElementById('loginVersion'); if(lv) lv.textContent = 'Version ' + APP_VERSION;
   const el = document.getElementById('appVersionInfo'); if(!el) return;
   el.textContent = `Version ${APP_VERSION} · ${isStandalone()?'installed app':'browser'} · ${window.innerWidth}px${(window.__appZoom||1)>1?' · zoom '+window.__appZoom:''}`;
 }

@@ -2,8 +2,10 @@
    Makes the app installable, load fast, and open even with weak signal.
    Live data (Google Apps Script) is NEVER cached — it always comes fresh.
    When you upload a new version, change VERSION below so phones update. */
-const VERSION = 'rmas-posm-v15';
-const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png", "./posm-org.js", "./posm-data-1.js", "./posm-data-2.js", "./posm-data-3.js", "./posm-data-4.js", "./posm-data-5.js", "./posm-data-6.js"];
+const VERSION = 'rmas-posm-v16';
+// posm-data-*.js (2.4 MB) are no longer pre-downloaded: the app only needs them to seed a new
+// Sheet or replace the POSM list, and they are cached the first time they are used.
+const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png", "./posm-org.js"];
 const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'unpkg.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', event => {
