@@ -1839,7 +1839,11 @@ function renderActivityFeed(){
   const more = document.getElementById('actShowMore');
   if(more) more.addEventListener('click', ()=>{ window.__actShow = CAP + 25; renderActivityFeed(); });
 }
-// Overdue = the due date has passed (a request due today is not late yet). Same rule as the Alerts panel.
+// Timeline: For Sorting has NO due date. Marked For Delivery -> due 7 days later.
+// Delivered -> proof of deployment photo due within 10 days (PROOF_DUE_DAYS).
+const DELIVERY_DUE_DAYS = 7;
+function reqDueDate(r){ return (r && r.status!=='for_sorting' && r.status!=='rejected' && r.dueDate) ? String(r.dueDate).slice(0,10) : ''; }
+// Overdue = more than 7 days since it was marked For Delivery (the due date has passed; due today is not late yet).
 function isOverdue(r){ return !!(r && r.status==='for_delivery' && r.dueDate && String(r.dueDate).slice(0,10) < todayStr()); }
 function getOverdueRequests(){ return DATA.requests.filter(isOverdue); }
 // Fast lookups: an index of the inventory rows, rebuilt only when the inventory list changes
@@ -2855,7 +2859,7 @@ function openNewRequestModal(){
       posmCode:document.getElementById('rqPosm').value, qty:Math.max(1,parseInt(document.getElementById('rqQty').value||'0',10)),
       warehouseId:document.getElementById('rqWh').value, store:storeInput.value||'—',
       ts:document.getElementById('rqTs').value||'—',
-      dateCreated:created, dateDelivered:null, dueDate:addDays(created,5),
+      dateCreated:created, dateDelivered:null, dueDate:'',   // no due date while For Sorting
       createdBy: (session && session.name) || ''
     };
     btn.disabled = true; btn.textContent = 'Saving...';
@@ -2978,7 +2982,7 @@ function advanceRequest(id){
     queueSave(label, async ()=>{ const res = await performAction('advanceRequest', payload); if(res && res.applied===false) showToast('Sent to Admin for approval: ' + label); });
     return;
   }
-  const predicted = toDelivery ? {status:'for_delivery', dueDate: addDays(payload.date, 7)} : {status:'delivered'};
+  const predicted = toDelivery ? {status:'for_delivery', dueDate: addDays(payload.date, DELIVERY_DUE_DAYS)} : {status:'delivered'};
   applyLocalUpdate('advanceRequest', payload, predicted); mutationEpoch++;
   renderAll();
   queueSave(label, async ()=>{ const res = await postAsMe('advanceRequest', payload); if(res && res.dueDate) r.dueDate = res.dueDate; });
@@ -3097,7 +3101,7 @@ function openAlertDetail(kind){
   } else if(kind==='overdue' || kind==='duesoon'){
     const list = alertDueRequests(kind), today = todayStr();
     title = kind==='overdue' ? `Overdue Deliveries — ${list.length}` : `Due Within 3 Days — ${list.length}`;
-    intro = kind==='overdue' ? 'Requests in <b>For Delivery</b> that passed their due date (7 days after approval). Oldest first.' : 'Requests in <b>For Delivery</b> that are due in the next 3 days.';
+    intro = kind==='overdue' ? 'Requests in <b>For Delivery</b> that passed their due date (7 days after being marked For Delivery). Oldest first.' : 'Requests in <b>For Delivery</b> that are due in the next 3 days.';
     table = `<table class="inv-table"><thead><tr><th>Request</th><th>POSM</th><th>Store / TS</th><th>Warehouse</th><th>Due</th></tr></thead><tbody>
       ${list.map(r=>{ const p = posmByCode(r.posmCode), w = whById(r.warehouseId);
         const days = Math.round((new Date(today) - new Date(r.dueDate))/86400000);
@@ -3626,7 +3630,7 @@ function reqCardHtml(r){
       <div class="kcard-meta" style="margin-top:2px;"><span>${r.id}</span><span>Requested ${fmtDateShort(r.dateCreated)}</span></div>`
     : `<div class="kcard-desc">${p?p.desc:''} · Qty ${r.qty}</div>
     <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>`}
-    <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.dueDate?'Due '+fmtDateShort(r.dueDate):''}</span></div>
+    <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.status==='for_delivery' && reqDueDate(r) ? 'Due '+fmtDateShort(reqDueDate(r)) : ''}</span></div>
     ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span style="display:inline-flex;align-items:center;gap:4px;">${icon('target',12)} ${r.purpose}</span></div>`:''}
     ${r.createdBy?`<div class="kcard-meta" style="margin-top:2px;"><span>Created by ${r.createdBy}</span></div>`:''}
     ${r.status!=='delivered' ? `<div class="kcard-actions"><button class="btn sm primary" data-advance="${r.id}" style="flex:1">${r.status==='for_sorting'?'Move to For Delivery':'Mark Delivered'}</button></div>`
@@ -3666,7 +3670,7 @@ function reqExportRow(r){
   const p = posmByCode(r.posmCode);
   return {'Request ID':r.id, 'POSM Code':r.posmCode, Description:p?p.desc:'', Model:p&&p.model||'', 'Business Unit':p?buLabel(p.bu):'',
     Qty:r.qty, Warehouse: whById(r.warehouseId)?whById(r.warehouseId).name:r.warehouseId, Store:r.store, 'Trade Supervisor':r.ts,
-    Purpose:r.purpose||'', Status:isDeployed(r)?'deployed':r.status, 'Date Created':r.dateCreated, 'Due Date':r.dueDate||'', 'Date Delivered':r.dateDelivered||'', 'Created By':r.createdBy||'',
+    Purpose:r.purpose||'', Status:isDeployed(r)?'deployed':r.status, 'Date Created':r.dateCreated, 'Due Date':reqDueDate(r), 'Date Delivered':r.dateDelivered||'', 'Created By':r.createdBy||'',
     'Proof of Deployment':proofStatusLabel(r), 'Proof Uploaded By':(proofOf(r)||{}).uploadedBy||'', 'Proof Uploaded At':fmtDT((proofOf(r)||{}).uploadedAt), 'Proof Warnings':String((proofOf(r)||{}).flags||'').split(',').filter(Boolean).map(pkFlagLabel).join('; ')};
 }
 let reqView = 'board';
@@ -3951,7 +3955,7 @@ function renderMetrics(){
     </div>
     ${currentlyOverdue.length ? `
     <div class="panel" style="margin-bottom:16px;">
-      <div class="panel-head"><div><h3>Currently Overdue Deliveries</h3><div class="panel-sub">"For Delivery" requests past their 1-week due date — not yet marked Delivered</div></div></div>
+      <div class="panel-head"><div><h3>Currently Overdue Deliveries</h3><div class="panel-sub">"For Delivery" requests more than 7 days after being marked For Delivery — not yet marked Delivered</div></div></div>
       <div class="table-wrap"><table><thead><tr><th>POSM</th><th>Store</th><th>TS</th><th>Warehouse</th><th>Due Date</th><th>Days Overdue</th></tr></thead>
         <tbody>
         ${currentlyOverdue.sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(r=>{
@@ -4728,7 +4732,7 @@ async function exportAnalyticsReport(asPdf){
       else timeliness = 'Not yet in delivery';
       return {'Request ID':r.id, 'POSM Code':r.posmCode, 'Description':(posmByCode(r.posmCode)||{}).desc||'',
         Qty:r.qty, Warehouse:(whById(r.warehouseId)||{}).name||'', Store:r.store, 'Trade Supervisor':r.ts, Purpose:r.purpose||'',
-        Status:r.status, 'Date Created':r.dateCreated, 'Due Date':r.dueDate||'', 'Date Delivered':r.dateDelivered||'', Timeliness:timeliness};
+        Status:r.status, 'Date Created':r.dateCreated, 'Due Date':reqDueDate(r), 'Date Delivered':r.dateDelivered||'', Timeliness:timeliness};
     });
     sheets.push({name:'Requests', rows:reqRows});
 
@@ -6179,7 +6183,7 @@ function showUpdateBar(){
   document.body.appendChild(bar);
 }
 
-const APP_VERSION = '2026.10.18-v28';
+const APP_VERSION = '2026.10.18-v29';
 function updateVersionInfo(){
   const lv = document.getElementById('loginVersion'); if(lv) lv.textContent = 'Version ' + APP_VERSION;
   const el = document.getElementById('appVersionInfo'); if(!el) return;
