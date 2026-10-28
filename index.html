@@ -2295,6 +2295,9 @@ function proofReviewList(){
     if(d.status!=='for_review' || (whF!=='all' && d.warehouseId!==whF)) return;
     const g = d.groupId || d.id; if(seen[g]) return; seen[g] = true;
     const latest = proofIndex()[d.requestId]; if(!latest || (latest.groupId||latest.id)!==g) return;
+    // Follow the BU filter like the Requests board does (a proof whose request can't be found is still listed, so nothing gets lost).
+    const cov = (DATA.deployments||[]).filter(x=>(x.groupId||x.id)===g).map(x=>DATA.requests.find(r=>r.id===x.requestId));
+    if(cov.length && cov.every(Boolean) && !cov.some(r=>matchesBUFilter(r.posmCode))) return;
     out.push(d);
   });
   return out.sort((a,b)=>String(a.uploadedAt).localeCompare(String(b.uploadedAt)));
@@ -3674,6 +3677,15 @@ function reqExportRow(r){
     'Proof of Deployment':proofStatusLabel(r), 'Proof Uploaded By':(proofOf(r)||{}).uploadedBy||'', 'Proof Uploaded At':fmtDT((proofOf(r)||{}).uploadedAt), 'Proof Warnings':String((proofOf(r)||{}).flags||'').split(',').filter(Boolean).map(pkFlagLabel).join('; ')};
 }
 let reqView = 'board';
+const REQ_COL_LIMIT = 25;   // cards shown per column before "Show all"
+const reqColAll = {};       // columns the user expanded
+// Deployed column: proofs waiting for Admin review come first (oldest first, same order as the alert),
+// then reviewed ones, newest upload first.
+function deployedCmp(a, b){
+  const pa = proofOf(a)||{}, pb = proofOf(b)||{}, ra = pa.status==='for_review'?0:1, rb = pb.status==='for_review'?0:1;
+  if(ra!==rb) return ra-rb;
+  return ra===0 ? String(pa.uploadedAt).localeCompare(String(pb.uploadedAt)) : String(pb.uploadedAt).localeCompare(String(pa.uploadedAt));
+}
 let reqMobileTab = (()=>{ try{ return sessionStorage.getItem('vs_req_mtab') || 'for_sorting'; }catch(e){ return 'for_sorting'; } })();
 function setReqMobileTab(key, keepPlace){
   reqMobileTab = key; try{ sessionStorage.setItem('vs_req_mtab', key); }catch(e){}
@@ -3745,10 +3757,10 @@ function renderRequests(){
       <div class="kanban m-tabs">
         ${cols.map(c=>{
           const items = reqs.filter(r=> c.key==='deployed' ? isDeployed(r) : c.key==='delivered' ? (r.status==='delivered' && !isDeployed(r)) : r.status===c.key)
-            .sort((a,b)=> c.key==='deployed' ? String((proofOf(b)||{}).uploadedAt).localeCompare(String((proofOf(a)||{}).uploadedAt))
+            .sort((a,b)=> c.key==='deployed' ? deployedCmp(a,b)
               : c.key==='delivered' ? String(b.dateDelivered||'').localeCompare(String(a.dateDelivered||'')) : (c.key==='for_sorting' ? reqArrivalCmp(a,b) : new Date(b.dateCreated)-new Date(a.dateCreated)));
           return `<div class="kanban-col${c.key===reqMobileTab?' m-on':''}" data-col="${c.key}"><div class="kanban-col-head"><h4><span class="badge ${c.cls}">${c.label}</span></h4><span class="kanban-count">${items.length}</span></div>
-            <div class="kcol-scroll${c.key==='for_sorting'?' kcol-sorting':''}">${(c.key==='for_sorting' ? sortingByTsHtml(items) : items.slice(0,25).map(reqCardHtml).join('')) || `<div class="empty-state">No requests here.</div>`}</div>
+            <div class="kcol-scroll${c.key==='for_sorting'?' kcol-sorting':''}">${(c.key==='for_sorting' ? sortingByTsHtml(items) : (reqColAll[c.key] ? items : items.slice(0,REQ_COL_LIMIT)).map(reqCardHtml).join('') + (!reqColAll[c.key] && items.length>REQ_COL_LIMIT ? `<button type="button" class="btn sm" data-col-all="${c.key}" style="width:100%;margin-top:8px;">Show all ${items.length} (${items.length-REQ_COL_LIMIT} more)</button>` : '')) || `<div class="empty-state">No requests here.</div>`}</div>
           </div>`;
         }).join('')}
       </div>
@@ -3758,6 +3770,7 @@ function renderRequests(){
     loadImagesFor(reqs.filter(r=>r.status==='for_sorting').slice(0,60).map(r=>r.posmCode));
     document.querySelectorAll('[data-proof-up]').forEach(b=>b.addEventListener('click',()=>openProofUploadModal(b.dataset.proofUp)));
     document.querySelectorAll('[data-proof-view]').forEach(b=>b.addEventListener('click',()=>openProofViewModal(b.dataset.proofView)));
+    document.querySelectorAll('[data-col-all]').forEach(b=>b.addEventListener('click',()=>{ reqColAll[b.dataset.colAll] = true; renderRequests(); }));
   } else {
     document.getElementById('btnNewTrf').addEventListener('click', openNewTransferModal);
     document.getElementById('reqViewRoot').innerHTML = `
