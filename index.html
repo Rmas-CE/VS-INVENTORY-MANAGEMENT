@@ -1614,7 +1614,15 @@ function applyLocalUpdateTo(action, payload, result){
       return true;
     }
     case 'newRequest': {
-      DATA.requests.push({id:payload.id, posmCode:payload.posmCode, qty:Number(payload.qty), warehouseId:payload.warehouseId, store:payload.store, ts:payload.ts, status:'for_sorting', dateCreated:payload.dateCreated, dateDelivered:'', dueDate:'', createdBy:payload.createdBy||'', purpose:payload.purpose||''});
+      // The request's qty is taken off the Inventory right away (For Sorting) — see Code.gs deductForRequest_.
+      const taken = !!(result && result.stockDeducted);
+      DATA.requests.push({id:payload.id, posmCode:payload.posmCode, qty:Number(payload.qty), warehouseId:payload.warehouseId, store:payload.store, ts:payload.ts, status:'for_sorting', dateCreated:payload.dateCreated, dateDelivered:'', dueDate:'', createdBy:payload.createdBy||'', purpose:payload.purpose||'', stockDeducted: taken?'yes':''});
+      if(taken){
+        let inv = DATA.inventory.find(r=>r.warehouseId===payload.warehouseId && r.posmCode===payload.posmCode);
+        if(!inv){ inv = {warehouseId:payload.warehouseId, posmCode:payload.posmCode, qty:0, beginningStock:0}; DATA.inventory.push(inv); }
+        inv.qty = result.newQty!==undefined ? Number(result.newQty) : Math.max(0, inv.qty - Number(payload.qty));
+        DATA.transactions.unshift({id:result.txnId||('TXN-'+payload.id), date:payload.dateCreated, type:'out', posmCode:payload.posmCode, warehouseId:payload.warehouseId, qty:Number(payload.qty), reason:'Dispatched for store request — taken at For Sorting ('+payload.store+')', ref:payload.id, receiptImage:''});
+      }
       return true;
     }
     case 'advanceRequest': {
@@ -1624,9 +1632,12 @@ function applyLocalUpdateTo(action, payload, result){
         req.status = 'for_delivery'; req.dueDate = result.dueDate||req.dueDate;
       } else if(result && result.status==='delivered'){
         req.status = 'delivered'; req.dateDelivered = payload.date;
-        const inv = DATA.inventory.find(r=>r.warehouseId===req.warehouseId && r.posmCode===req.posmCode);
-        if(inv) inv.qty -= Number(req.qty);
-        DATA.transactions.unshift({id:payload.txnId, date:payload.date, type:'out', posmCode:req.posmCode, warehouseId:req.warehouseId, qty:Number(req.qty), reason:'Dispatched for store delivery ('+req.store+')', ref:req.id, receiptImage:''});
+        // Requests made from Nov 5 2026 already took their stock at For Sorting — no second deduction.
+        if(String(req.stockDeducted||'').toLowerCase()!=='yes'){
+          const inv = DATA.inventory.find(r=>r.warehouseId===req.warehouseId && r.posmCode===req.posmCode);
+          if(inv) inv.qty -= Number(req.qty);
+          DATA.transactions.unshift({id:payload.txnId, date:payload.date, type:'out', posmCode:req.posmCode, warehouseId:req.warehouseId, qty:Number(req.qty), reason:'Dispatched for store delivery ('+req.store+')', ref:req.id, receiptImage:''});
+        }
       } else return false;
       return true;
     }
@@ -1839,10 +1850,26 @@ function renderActivityFeed(){
   const more = document.getElementById('actShowMore');
   if(more) more.addEventListener('click', ()=>{ window.__actShow = CAP + 25; renderActivityFeed(); });
 }
-// Timeline: For Sorting has NO due date. Marked For Delivery -> due 7 days later.
-// Delivered -> proof of deployment photo due within 10 days (PROOF_DUE_DAYS).
+// Timeline: For Sorting -> RMAS must sort and move it to For Delivery within 10 days of the request.
+// Marked For Delivery -> due 7 days later. Delivered -> proof of deployment photo due within 10 days (PROOF_DUE_DAYS).
+const SORTING_DUE_DAYS = 10;
 const DELIVERY_DUE_DAYS = 7;
-function reqDueDate(r){ return (r && r.status!=='for_sorting' && r.status!=='rejected' && r.dueDate) ? String(r.dueDate).slice(0,10) : ''; }
+// Calendar day (local time) of a stored date / timestamp, as YYYY-MM-DD.
+function localDay(v){
+  const s = String(v==null?'':v).trim(); if(!s) return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s); if(isNaN(d)) return s.slice(0,10);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function sortingDueDate(r){ const c = r && localDay(r.dateCreated); return c ? addDays(c, SORTING_DUE_DAYS) : ''; }
+function reqDueDate(r){
+  if(!r || r.status==='rejected') return '';
+  if(r.status==='for_sorting') return sortingDueDate(r);
+  return r.dueDate ? String(r.dueDate).slice(0,10) : '';
+}
+// Sorting overdue = still in For Sorting after its 10-day due date (due today is not late yet).
+function isSortingOverdue(r){ const d = (r && r.status==='for_sorting') ? sortingDueDate(r) : ''; return !!(d && d < todayStr()); }
+function getOverdueSorting(){ return DATA.requests.filter(isSortingOverdue); }
 // Overdue = more than 7 days since it was marked For Delivery (the due date has passed; due today is not late yet).
 function isOverdue(r){ return !!(r && r.status==='for_delivery' && r.dueDate && String(r.dueDate).slice(0,10) < todayStr()); }
 function getOverdueRequests(){ return DATA.requests.filter(isOverdue); }
@@ -1938,7 +1965,7 @@ function updateNotifBadge(){
   const badge = document.getElementById('notifBadge');
   if(!badge || !DATA || !session) return;
   const pendingCount = session.role==='admin' ? (DATA.pendingActions||[]).filter(p=>p.status==='pending').length : 0;
-  const overdueCount = getOverdueRequests().length;
+  const overdueCount = getOverdueRequests().length + getOverdueSorting().length;
   const total = pendingCount + overdueCount;
   badge.textContent = total > 99 ? '99+' : total;
   badge.style.display = total > 0 ? '' : 'none';
@@ -1958,6 +1985,7 @@ function renderNotifPanel(){
   const isAdmin = session && session.role==='admin';
   const pending = isAdmin ? (DATA.pendingActions||[]).filter(p=>p.status==='pending').sort((a,b)=>String(b.submittedAt).localeCompare(String(a.submittedAt))) : [];
   const overdue = getOverdueRequests().sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate)));
+  const sortLate = getOverdueSorting().sort((a,b)=>sortingDueDate(a).localeCompare(sortingDueDate(b)));
   panel.innerHTML = `
     <div class="notif-panel-head"><span>Notifications</span><button id="notifCloseBtn">&times;</button></div>
     ${isAdmin ? `
@@ -1974,6 +2002,14 @@ function renderNotifPanel(){
         const daysOver = daysSinceDate(r.dueDate);
         return `<div class="notif-item" data-goto="requests"><div class="t1">${r.posmCode} — ${r.store}</div><div class="t2">${p?p.desc:''} · ${daysOver} day${daysOver!==1?'s':''} overdue</div></div>`;
       }).join('') : `<div class="notif-empty">No overdue deliveries right now.</div>`}
+    </div>
+    <div class="notif-section">
+      <div class="notif-section-title">Overdue Sorting (${sortLate.length})</div>
+      ${sortLate.length ? sortLate.slice(0,8).map(r=>{
+        const p = posmByCode(r.posmCode);
+        const daysOver = daysSinceDate(sortingDueDate(r));
+        return `<div class="notif-item" data-goto="requests"><div class="t1">${r.posmCode} — ${r.store}</div><div class="t2">${p?p.desc:''} · not sorted, ${daysOver} day${daysOver!==1?'s':''} overdue</div></div>`;
+      }).join('') : `<div class="notif-empty">No overdue sorting right now.</div>`}
     </div>
   `;
   document.getElementById('notifCloseBtn').addEventListener('click', closeNotifPanel);
@@ -2862,7 +2898,7 @@ function openNewRequestModal(){
       posmCode:document.getElementById('rqPosm').value, qty:Math.max(1,parseInt(document.getElementById('rqQty').value||'0',10)),
       warehouseId:document.getElementById('rqWh').value, store:storeInput.value||'—',
       ts:document.getElementById('rqTs').value||'—',
-      dateCreated:created, dateDelivered:null, dueDate:'',   // no due date while For Sorting
+      dateCreated:created, dateDelivered:null, dueDate:'',   // For Sorting due date is worked out from dateCreated (+10 days), see sortingDueDate()
       createdBy: (session && session.name) || ''
     };
     btn.disabled = true; btn.textContent = 'Saving...';
@@ -2870,9 +2906,9 @@ function openNewRequestModal(){
       // straight in "For Sorting" for everyone to see.
       const reqId = uid('REQ');
       try{
-        await postAction('newRequest', Object.assign({id:reqId}, data, readCreds()));
+        const res = await postAction('newRequest', Object.assign({id:reqId}, data, readCreds()));
         closeModal();
-        applyLocalUpdate('newRequest', Object.assign({id:reqId}, data));
+        applyLocalUpdate('newRequest', Object.assign({id:reqId}, data), res);
         renderAll();
       }
       catch(e){ alert('Could not save the request.\n\n' + ((e && e.message) || 'Please try again.')); btn.disabled=false; btn.textContent='Create Request'; }
@@ -3049,6 +3085,12 @@ function alertSortingList(){
   return DATA.requests.filter(r=> r.status==='for_sorting' && (whF==='all' || r.warehouseId===whF) && matchesBUFilter(r.posmCode))
     .sort((a,b)=>String(a.dateCreated).localeCompare(String(b.dateCreated)));
 }
+// Requests still in For Sorting: overdue (past the 10-day sorting due date) or due within 3 days.
+function alertSortDue(kind){
+  const today = todayStr(), in3 = addDays(today, 3);
+  return alertSortingList().filter(r=>{ const d = sortingDueDate(r); return d && (kind==='sortoverdue' ? d < today : (d >= today && d <= in3)); })
+    .sort((a,b)=>sortingDueDate(a).localeCompare(sortingDueDate(b)));
+}
 function alertDueRequests(kind){
   const today = todayStr(), in3 = addDays(today, 3), whF = currentFilterWarehouse();
   return DATA.requests.filter(r=> r.status==='for_delivery' && r.dueDate && (whF==='all' || r.warehouseId===whF) &&
@@ -3067,6 +3109,14 @@ function lowStockPdfRows(list){
   const th = alertThreshold();
   return list.map(x=>({'POSM Code':x.p.code, Description:x.p.desc, Model:x.p.model||'', Type:x.p.type||'', 'Business Unit':buLabel(x.p.bu),
       'Total Qty (all warehouses)':x.qty, 'Reorder Level':th}));
+}
+// "Sort by" cell: the sorting due date with a late / due-soon tag.
+function sortDueCell(r, today){
+  const due = sortingDueDate(r); if(!due) return '';
+  const days = Math.round((new Date(today) - new Date(due))/86400000);
+  const tag = days>0 ? `<span class="badge expired">${days} day${days!==1?'s':''} late</span>`
+    : `<span class="badge ${days>=-3?'obsolete':'pending'}">${days===0?'Due today':'in '+(-days)+' day'+(-days!==1?'s':'')}</span>`;
+  return `<div style="white-space:nowrap;">${fmtDate(due)}</div>${tag}`;
 }
 function openAlertDetail(kind){
   const scopeTxt = escHtml(pdfScopeLabel());
@@ -3088,18 +3138,21 @@ function openAlertDetail(kind){
       'Per Warehouse': DATA.inventory.filter(r=>r.posmCode===x.p.code && r.qty>0).map(r=>((whById(r.warehouseId)||{}).name||r.warehouseId)+': '+r.qty).join(', ')}));
     exportName = 'Low-Stock';
     loadImagesFor(list.slice(0,60).map(x=>x.p.code));
-  } else if(kind==='sorting'){
-    const list = alertSortingList();
-    title = `Waiting for Sorting — ${list.length}`;
-    intro = 'New requests still in <b>For Sorting</b>. Oldest first.';
-    table = `<table class="inv-table"><thead><tr><th>Request</th><th>POSM</th><th>Store / TS</th><th>Warehouse</th><th>Requested</th></tr></thead><tbody>
+  } else if(kind==='sorting' || kind==='sortoverdue' || kind==='sortduesoon'){
+    const list = kind==='sorting' ? alertSortingList() : alertSortDue(kind), today = todayStr();
+    title = kind==='sortoverdue' ? `Overdue Sorting — ${list.length}` : kind==='sortduesoon' ? `Sorting Due Within 3 Days — ${list.length}` : `Waiting for Sorting — ${list.length}`;
+    intro = kind==='sortoverdue' ? `Requests still in <b>For Sorting</b> after their due date (${SORTING_DUE_DAYS} days after the request). Move them to For Delivery. Oldest first.`
+          : kind==='sortduesoon' ? `Requests in <b>For Sorting</b> that must be moved to For Delivery in the next 3 days.`
+          : `New requests still in <b>For Sorting</b> — each must be sorted and moved to For Delivery within ${SORTING_DUE_DAYS} days. Oldest first.`;
+    table = `<table class="inv-table"><thead><tr><th>Request</th><th>POSM</th><th>Store / TS</th><th>Warehouse</th><th>Requested</th><th>Sort by</th></tr></thead><tbody>
       ${list.map(r=>{ const p = posmByCode(r.posmCode), w = whById(r.warehouseId), d = daysSinceDate(r.dateCreated);
         return `<tr><td class="cell-sub">${r.id}</td><td><div class="cell-main">${r.posmCode} × ${r.qty}</div><div class="cell-sub">${p?p.desc:''}</div>${modelHtml(p)}</td>
           <td><div>${r.store}</div><div class="cell-sub">${r.ts||''}</div></td><td class="cell-sub">${w?w.name:r.warehouseId}</td>
-          <td><div style="white-space:nowrap;">${fmtDate(r.dateCreated)}</div><span class="badge ${d>2?'obsolete':'pending'}">${d===0?'Today':d+' day'+(d!==1?'s':'')+' ago'}</span></td></tr>`; }).join('')}
+          <td><div style="white-space:nowrap;">${fmtDate(r.dateCreated)}</div><span class="badge ${d>2?'obsolete':'pending'}">${d===0?'Today':d+' day'+(d!==1?'s':'')+' ago'}</span></td>
+          <td>${sortDueCell(r, today)}</td></tr>`; }).join('')}
       </tbody></table>`;
-    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Model:(posmByCode(r.posmCode)||{}).model||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Date Requested':r.dateCreated}));
-    exportName = 'Waiting-For-Sorting';
+    exportRows = list.map(r=>({'Request ID':r.id, 'POSM Code':r.posmCode, Description:(posmByCode(r.posmCode)||{}).desc||'', Model:(posmByCode(r.posmCode)||{}).model||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts, Warehouse:(whById(r.warehouseId)||{}).name||r.warehouseId, 'Date Requested':r.dateCreated, 'Sort By (Due)':sortingDueDate(r)}));
+    exportName = kind==='sortoverdue' ? 'Overdue-Sorting' : kind==='sortduesoon' ? 'Sorting-Due-Soon' : 'Waiting-For-Sorting';
     goBtn = `<button class="btn" id="alGo" data-go="requests">Open Requests board</button>`;
   } else if(kind==='overdue' || kind==='duesoon'){
     const list = alertDueRequests(kind), today = todayStr();
@@ -3172,6 +3225,9 @@ function renderAlertPanel(){
   const items = [], isAdmin = !!(session && session.role==='admin');
   const sortN = alertSortingList().length;
   if(sortN) items.push({icon:'requests', color:'warning', label:`${sortN} ${vsPl(sortN,'request','requests')} waiting for sorting`, nav:'sorting'});
+  const sortLateN = alertSortDue('sortoverdue').length, sortSoonN = alertSortDue('sortduesoon').length;
+  if(sortLateN) items.push({icon:'alert', color:'danger', label:`${sortLateN} ${vsPl(sortLateN,'request','requests')} OVERDUE for sorting (more than ${SORTING_DUE_DAYS} days in For Sorting)`, nav:'sortoverdue'});
+  if(sortSoonN) items.push({icon:'clock', color:'warning', label:`${sortSoonN} ${vsPl(sortSoonN,'request','requests')} must be sorted within 3 days`, nav:'sortduesoon'});
   if(ALERTS.pendingCount && isAdmin) items.push({icon:'clock', color:'warning', label:`${ALERTS.pendingCount} ${vsPl(ALERTS.pendingCount,'action','actions')} awaiting approval`, nav:'pendingList'});
   // Counted from the full data of the current view (region / BU / warehouse), so the number
   // always matches the list that opens when the alert is clicked.
@@ -3289,7 +3345,8 @@ function renderDashboard(){
     const isAdmin = session && session.role==='admin';
     const reqRow = (r, extra)=>Object.assign({ID:r.id, 'POSM Code':r.posmCode, Model:(posmByCode(r.posmCode)||{}).model||'', Qty:r.qty, Store:r.store, 'Trade Supervisor':r.ts}, extra);
     const sheets = [
-      {name:'Waiting for Sorting', rows:alertSortingList().map(r=>reqRow(r, {'Date Requested':r.dateCreated}))},
+      {name:'Waiting for Sorting', rows:alertSortingList().map(r=>reqRow(r, {'Date Requested':r.dateCreated, 'Sort By (Due)':sortingDueDate(r)}))},
+      {name:'Overdue Sorting', rows:alertSortDue('sortoverdue').map(r=>reqRow(r, {'Date Requested':r.dateCreated, 'Sort By (Due)':sortingDueDate(r)}))},
       {name:'Overdue Deliveries', rows:alertDueRequests('overdue').map(r=>reqRow(r, {'Due Date':r.dueDate}))},
       {name:'Due Soon (3 days)', rows:alertDueRequests('duesoon').map(r=>reqRow(r, {'Due Date':r.dueDate}))},
       {name:'No Proof of Deployment', rows:proofMissingList().map(r=>reqRow(r, {'Date Delivered':r.dateDelivered, 'Proof Status':proofStatusLabel(r)}))},
@@ -3617,7 +3674,7 @@ function isOpeningReq(r){ return /store\s*(opening|reopening)/i.test(String(r &&
 const OPENING_BADGE = `<span class="badge opening" title="Store Opening / Reopening request">🏬 Store Opening</span>`;
 function reqCardHtml(r){
   const p = posmByCode(r.posmCode);
-  const isLate = isOverdue(r);
+  const isLate = isOverdue(r) || isSortingOverdue(r);
   const deliveredLate = r.status==='delivered' && r.dateDelivered && r.dueDate && new Date(r.dateDelivered) > new Date(r.dueDate);
   const opening = isOpeningReq(r);
   return `<div class="kcard${opening?' opening':''}"><div class="kcard-top"><span class="kcard-code">${r.posmCode}</span><span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">${opening?OPENING_BADGE:''}${isLate?'<span class="badge late">Overdue</span>':(deliveredLate?'<span class="badge late">Late</span>':'')}</span></div>
@@ -3633,7 +3690,7 @@ function reqCardHtml(r){
       <div class="kcard-meta" style="margin-top:2px;"><span>${r.id}</span><span>Requested ${fmtDateShort(r.dateCreated)}</span></div>`
     : `<div class="kcard-desc">${p?p.desc:''} · Qty ${r.qty}</div>
     <div class="kcard-desc">${r.store} · TS: ${r.ts}</div>`}
-    <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${r.status==='for_delivery' && reqDueDate(r) ? 'Due '+fmtDateShort(reqDueDate(r)) : ''}</span></div>
+    <div class="kcard-meta"><span>${whById(r.warehouseId)?whById(r.warehouseId).name+' ('+whById(r.warehouseId).region+')':''}</span><span>${(r.status==='for_delivery' || r.status==='for_sorting') && reqDueDate(r) ? (r.status==='for_sorting'?'Sort by ':'Due ')+fmtDateShort(reqDueDate(r)) : ''}</span></div>
     ${r.purpose?`<div class="kcard-meta" style="margin-top:2px;"><span style="display:inline-flex;align-items:center;gap:4px;">${icon('target',12)} ${r.purpose}</span></div>`:''}
     ${r.createdBy?`<div class="kcard-meta" style="margin-top:2px;"><span>Created by ${r.createdBy}</span></div>`:''}
     ${r.status!=='delivered' ? `<div class="kcard-actions"><button class="btn sm primary" data-advance="${r.id}" style="flex:1">${r.status==='for_sorting'?'Move to For Delivery':'Mark Delivered'}</button></div>`
@@ -4422,6 +4479,17 @@ function reviewPendingItem(id, decision){
       const targetId = res.payload && res.payload.id;
       const target = targetId && (res.action==='advanceRequest' ? DATA.requests : DATA.transfers).find(x=>x.id===targetId);
       if(target) target.status = 'rejected';
+      // A rejected request gives its qty back to the Inventory (done by Code.gs; mirrored here).
+      const ret = res.returned;
+      if(ret && res.action==='advanceRequest'){
+        if(target) target.stockDeducted = 'returned';
+        const base = DATA_ALL || DATA;   // change the full copy; the filtered view is rebuilt from it
+        let inv = base.inventory.find(r=>r.warehouseId===ret.warehouseId && r.posmCode===ret.posmCode);
+        if(!inv){ inv = {warehouseId:ret.warehouseId, posmCode:ret.posmCode, qty:0, beginningStock:0}; base.inventory.push(inv); }
+        inv.qty = Number(ret.newQty);
+        base.transactions.unshift({id:ret.txnId, date:ret.date, type:'in', posmCode:ret.posmCode, warehouseId:ret.warehouseId, qty:Number(ret.qty), reason:'Returned to stock — request rejected ('+ret.store+')', ref:ret.id, receiptImage:''});
+        if(base !== DATA){ DATA = scopeData(base); }
+      }
     }
     requestBackgroundRender();
   });
@@ -4742,6 +4810,7 @@ async function exportAnalyticsReport(asPdf){
       if(r.status==='delivered') timeliness = (r.dateDelivered && r.dueDate && new Date(r.dateDelivered)>new Date(r.dueDate)) ? 'Late' : 'On-time';
       else if(r.status==='rejected') timeliness = 'Rejected';
       else if(r.status==='for_delivery') timeliness = isOverdue(r) ? 'Overdue' : 'On Track';
+      else if(r.status==='for_sorting') timeliness = isSortingOverdue(r) ? 'Sorting Overdue' : 'Sorting On Track';
       else timeliness = 'Not yet in delivery';
       return {'Request ID':r.id, 'POSM Code':r.posmCode, 'Description':(posmByCode(r.posmCode)||{}).desc||'',
         Qty:r.qty, Warehouse:(whById(r.warehouseId)||{}).name||'', Store:r.store, 'Trade Supervisor':r.ts, Purpose:r.purpose||'',
